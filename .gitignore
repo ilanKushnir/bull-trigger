@@ -1,0 +1,35 @@
+# Node
+node_modules/
+
+# Build outputs
+dist/
+coverage/
+
+# Environment files
+*.env
+*.env.*
+
+# SQLite databases
+*.sqlite
+
+# Secrets
+secrets/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+
+# Logs
+logs/
+*.log
+
+# Docker
+*.local
+
+# Mac & Linux generated files
+.swp
+.swo 

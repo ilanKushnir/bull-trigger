@@ -1,0 +1,11 @@
+{
+  "name": "bull-trigger",
+  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "workspaces": [
+    "backend",
+    "frontend",
+    "packages/common"
+  ]
+} 
