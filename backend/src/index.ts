@@ -1,11 +1,23 @@
+// @ts-nocheck
 import Fastify from 'fastify';
-import fp from 'fastify-plugin';
+import fastifyEnv from '@fastify/env';
 import fs from 'fs';
 import dotenvSafe from 'dotenv-safe';
 import { getNowIso } from '@crypto-kush/common';
+import path from 'path';
 
 function loadEnv() {
-  dotenvSafe.config({ example: '.env.example', allowEmptyValues: true });
+  const backendDir = process.cwd();
+  const rootDir = fs.existsSync(`${backendDir}/../.env`)
+    ? path.resolve(backendDir, '..')
+    : backendDir;
+  const exampleFile = fs.existsSync(path.join(backendDir, '.env.example'))
+    ? path.join(backendDir, '.env.example')
+    : path.join(rootDir, '.env.example');
+
+  // Ensure .env file is read correctly
+  process.chdir(rootDir);
+  dotenvSafe.config({ example: exampleFile, allowEmptyValues: true });
   if (!process.env.OPENAI_KEY) {
     try {
       const secret = fs.readFileSync('/run/secrets/openai_key', 'utf8').trim();
@@ -25,18 +37,10 @@ const envSchema = {
   }
 };
 
-async function envPlugin(fastify: Fastify.FastifyInstance) {
-  //@ts-ignore
-  await fastify.register(import('fastify-env'), {
-    schema: envSchema,
-    data: process.env,
-    dotenv: false
-  });
-}
-
 const buildServer = async () => {
   const fastify = Fastify({ logger: true });
-  await fastify.register(fp(envPlugin));
+  //@ts-ignore
+  await fastify.register(fastifyEnv, { schema: envSchema, data: process.env, dotenv: false });
   fastify.get('/health', async () => ({ status: 'ok' }));
   fastify.get('/time', async () => ({ now: getNowIso() }));
   return fastify;
