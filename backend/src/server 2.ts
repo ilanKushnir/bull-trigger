@@ -7,8 +7,6 @@ import helmet from '@fastify/helmet';
 import sensible from '@fastify/sensible';
 import { fileURLToPath, pathToFileURL } from 'url';
 import path from 'path';
-import Database from 'better-sqlite3';
-import { refreshRegistry, runStrategyOnce } from './strategies/registry';
 
 const envSchema = {
   type: 'object',
@@ -18,9 +16,6 @@ const envSchema = {
     NODE_ENV: { type: 'string', default: 'development' }
   }
 };
-
-const DB_FILE_PATH = process.env.DB_FILE || path.resolve(process.cwd(), 'database.sqlite');
-const sqliteDb = new Database(DB_FILE_PATH);
 
 export const buildServer = async () => {
   const fastify = Fastify({ logger: true });
@@ -43,29 +38,6 @@ export const buildServer = async () => {
   });
 
   fastify.get('/healthz', async () => ({ status: 'ok' }));
-
-  fastify.get('/api/strategies', async () => {
-    const rows = sqliteDb.prepare('SELECT * FROM strategies').all();
-    return rows;
-  });
-
-  fastify.put<{ Params: { id: string }; Body: any }>('/api/strategies/:id', async (req, reply) => {
-    const id = Number(req.params.id);
-    const body = req.body;
-    sqliteDb.prepare('UPDATE strategies SET enabled = @enabled, cron = @cron, triggers = @triggers WHERE id = @id').run({
-      id,
-      enabled: body.enabled ? 1 : 0,
-      cron: body.cron,
-      triggers: JSON.stringify(body.triggers ?? null)
-    });
-    refreshRegistry();
-    return { ok: true };
-  });
-
-  fastify.post<{ Params: { id: string } }>('/api/strategies/:id/run', async (req) => {
-    runStrategyOnce(Number(req.params.id));
-    return { ok: true };
-  });
 
   return fastify;
 };

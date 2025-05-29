@@ -2,7 +2,25 @@
 import { Telegraf, Markup } from 'telegraf';
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
+import dotenvSafe from 'dotenv-safe';
 import { randomUUID } from 'crypto';
+
+// Load environment
+function loadEnv() {
+  const backendDir = process.cwd();
+  const rootDir = fs.existsSync(`${backendDir}/../.env`)
+    ? path.resolve(backendDir, '..')
+    : backendDir;
+  const exampleFile = fs.existsSync(path.join(backendDir, '.env.example'))
+    ? path.join(backendDir, '.env.example')
+    : path.join(rootDir, '.env.example');
+
+  process.chdir(rootDir);
+  dotenvSafe.config({ example: exampleFile, allowEmptyValues: true });
+}
+
+loadEnv();
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 if (!BOT_TOKEN) {
@@ -82,7 +100,5 @@ export async function startTelegram() {
   console.log('[telegram] Bot started');
 }
 
-// start if executed directly
-if (require.main === module) {
-  startTelegram();
-} 
+// start directly when executed
+startTelegram(); 

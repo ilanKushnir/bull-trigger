@@ -17,7 +17,10 @@ export const users = sqliteTable('users', {
 export const strategies = sqliteTable('strategies', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),
-  description: text('description')
+  description: text('description'),
+  enabled: integer('enabled', { mode: 'boolean' }).default(true).notNull(),
+  cron: text('cron').default('*/5 * * * *'),
+  triggers: text('triggers')
 });
 
 export const prompts = sqliteTable('prompts', {

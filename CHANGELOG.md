@@ -21,3 +21,7 @@ Fastify server skeleton with plugins, swagger docs and health route added.
 ## [step-6] telegram gateway ready - 2024-05-29
 
 Telegram bot gateway with inline commands & auth added. 
+
+## [step-7] strategy registry complete - 2024-05-30
+
+DB-driven strategy registry with scheduler and REST endpoints. 
