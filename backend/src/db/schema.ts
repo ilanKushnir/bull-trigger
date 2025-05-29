@@ -37,5 +37,6 @@ export const messages = sqliteTable('messages', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   signalHash: text('signal_hash').notNull(),
   tgMsgId: integer('tg_msg_id'),
-  sentAt: text('sent_at')
+  sentAt: text('sent_at'),
+  reaction: text('reaction')
 });

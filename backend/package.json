@@ -27,6 +27,7 @@
     "drizzle-orm": "^0.30.0",
     "telegraf": "^4.12.2",
     "node-cron": "^3.0.2",
+    "date-fns": "^3.3.1",
     "@langchain/openai": "^0.0.30",
     "@langchain/langgraph": "^0.0.10"
   },

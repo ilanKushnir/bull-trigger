@@ -87,12 +87,10 @@ bot.command('history', (ctx) => {
 
 bot.on('callback_query', async (ctx) => {
   const data = ctx.callbackQuery.data;
-  if (data?.startsWith('asset_')) {
-    const symbol = data.split('_')[1];
-    await ctx.answerCbQuery(`Analyzing ${symbol}...`);
-    // fake analysis result
-    await ctx.editMessageText(`📈 ${symbol} looks strong! ${pick(congratsLines)}`);
-  }
+  const msgId = ctx.callbackQuery.message?.message_id;
+  if (!msgId) return;
+  sqlite.prepare('UPDATE messages SET reaction = ? WHERE tg_msg_id = ?').run(data, msgId);
+  await ctx.answerCbQuery('Recorded 👍');
 });
 
 export async function startTelegram() {
@@ -104,9 +102,9 @@ export async function sendMessage(text: string, buttons?: any) {
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!chatId) {
     console.warn('[telegram] TELEGRAM_CHAT_ID not set, skipping send');
-    return;
+    return undefined;
   }
-  await bot.telegram.sendMessage(chatId, text, {
+  return await bot.telegram.sendMessage(chatId, text, {
     parse_mode: 'Markdown',
     ...(buttons ? { reply_markup: buttons } : {})
   });
