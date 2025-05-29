@@ -12,9 +12,18 @@ This repository contains the initial open-source scaffold for the Bull Trigger p
 
 ## Getting Started
 
+### Prerequisites
+
+- Node.js >= 18
+- Docker & Docker Compose
+- GNU Make (or compatible)
+
+### Setup
+
 ```bash
-make bootstrap # install dependencies for all workspaces
-make up        # start dev environment using Docker Compose
+make bootstrap       # install dependencies for all workspaces
+./scripts/setup.sh   # create .env from template
+make up              # start dev environment with Docker Compose
 ```
 
 ## License

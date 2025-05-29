@@ -30,6 +30,9 @@ logs/
 # Docker
 *.local
 
+docker/secrets/openai_key
+!docker/secrets/*.example
+
 # Mac & Linux generated files
 .swp
 .swo 

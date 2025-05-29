@@ -1,0 +1,16 @@
+{
+  "name": "@bull-trigger/backend",
+  "version": "0.1.0",
+  "main": "src/index.js",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "node src/index.js",
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "fastify": "^4.27.2",
+    "fastify-env": "^6.0.0",
+    "dotenv-safe": "^8.2.0"
+  }
+} 
