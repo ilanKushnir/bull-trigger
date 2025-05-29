@@ -1,3 +1,7 @@
+## [step-4] DB schema, migration, seeding - 2024-05-29
+
+SQLite database setup with Drizzle ORM, migration runner and seed script.
+
 ## [step-3] Common package added - 2024-05-29
 
 Shared DTOs, Zod schemas and utilities extracted to `@crypto-kush/common`.

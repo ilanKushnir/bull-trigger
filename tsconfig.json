@@ -10,6 +10,7 @@
     "baseUrl": ".",
     "paths": {
       "@crypto-kush/common/*": ["packages/common/src/*"]
-    }
+    },
+    "types": ["node"]
   }
 } 
