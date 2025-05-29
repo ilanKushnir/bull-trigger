@@ -9,11 +9,16 @@
     "build": "tsc -p .",
     "start": "npm run migrate && node dist/index.js",
     "migrate": "tsx src/db/runMigrate.ts",
-    "seed": "tsx src/db/seed.ts"
+    "seed": "tsx src/db/seed.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "fastify": "^5.3.3",
     "@fastify/env": "^5.0.2",
+    "@fastify/swagger": "^9.5.1",
+    "@fastify/swagger-ui": "^5.2.2",
+    "@fastify/helmet": "^13.0.1",
+    "@fastify/sensible": "^6.0.3",
     "dotenv-safe": "^8.2.0",
     "@crypto-kush/common": "0.1.0",
     "better-sqlite3": "^9.0.0",
@@ -24,6 +29,12 @@
     "ts-node": "^10.9.1",
     "tsx": "^4.7.0",
     "@types/node": "^20.6.0",
-    "drizzle-kit": "^0.19.8"
+    "drizzle-kit": "^0.19.8",
+    "vitest": "^1.5.0",
+    "supertest": "^6.3.4",
+    "@types/supertest": "^2.0.12"
+  },
+  "vitest": {
+    "environment": "node"
   }
 } 

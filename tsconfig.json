@@ -9,7 +9,8 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "@crypto-kush/common/*": ["packages/common/src/*"]
+      "@crypto-kush/common/*": ["packages/common/src/*"],
+      "@crypto-kush/common": ["packages/common/src/index.ts"]
     },
     "types": ["node"]
   }
