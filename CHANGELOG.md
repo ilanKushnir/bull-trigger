@@ -17,3 +17,7 @@ Environment config hardened with dotenv-safe, secret management, and setup scrip
 ## [step-5] server skeleton + swagger - 2024-05-29
 
 Fastify server skeleton with plugins, swagger docs and health route added. 
+
+## [step-6] telegram gateway ready - 2024-05-29
+
+Telegram bot gateway with inline commands & auth added. 

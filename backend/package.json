@@ -10,7 +10,8 @@
     "start": "npm run migrate && node dist/index.js",
     "migrate": "tsx src/db/runMigrate.ts",
     "seed": "tsx src/db/seed.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bot": "tsx src/telegram/gateway.ts"
   },
   "dependencies": {
     "fastify": "^5.3.3",
@@ -22,7 +23,8 @@
     "dotenv-safe": "^8.2.0",
     "@crypto-kush/common": "0.1.0",
     "better-sqlite3": "^9.0.0",
-    "drizzle-orm": "^0.30.0"
+    "drizzle-orm": "^0.30.0",
+    "telegraf": "^4.12.2"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
