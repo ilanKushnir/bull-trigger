@@ -32,3 +32,10 @@ export const settings = sqliteTable('settings', {
   key: text('key').primaryKey(),
   value: text('value')
 });
+
+export const messages = sqliteTable('messages', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  signalHash: text('signal_hash').notNull(),
+  tgMsgId: integer('tg_msg_id'),
+  sentAt: text('sent_at')
+});

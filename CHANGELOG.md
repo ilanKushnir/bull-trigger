@@ -25,3 +25,7 @@ Telegram bot gateway with inline commands & auth added.
 ## [step-7] strategy registry complete - 2024-05-30
 
 DB-driven strategy registry with scheduler and REST endpoints. 
+
+## [step-9] signal pipeline, dedup, reaction flow - 2024-05-30
+
+Signal formatting, dispatch, 72h dedup and DB message tracking. 

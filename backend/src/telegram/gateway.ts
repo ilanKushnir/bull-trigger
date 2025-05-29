@@ -100,5 +100,17 @@ export async function startTelegram() {
   console.log('[telegram] Bot started');
 }
 
+export async function sendMessage(text: string, buttons?: any) {
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!chatId) {
+    console.warn('[telegram] TELEGRAM_CHAT_ID not set, skipping send');
+    return;
+  }
+  await bot.telegram.sendMessage(chatId, text, {
+    parse_mode: 'Markdown',
+    ...(buttons ? { reply_markup: buttons } : {})
+  });
+}
+
 // start directly when executed
 startTelegram(); 
