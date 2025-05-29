@@ -3,6 +3,8 @@ import cron from 'node-cron';
 import Database from 'better-sqlite3';
 import path from 'path';
 import { AbstractStrategy, StrategyContext } from './abstract';
+import { WeeklyEducationStrategy } from './weeklyEducation';
+import { TokenWatcherStrategy } from './tokenWatcher';
 
 const DB_FILE = process.env.DB_FILE || path.resolve(process.cwd(), 'database.sqlite');
 const sqlite = new Database(DB_FILE);
@@ -13,6 +15,11 @@ type JobEntry = {
 };
 
 const jobs: Record<number, JobEntry> = {};
+
+const STRATEGY_MAP: Record<string, any> = {
+  WeeklyEducation: WeeklyEducationStrategy,
+  TokenWatcher: TokenWatcherStrategy
+};
 
 function loadEnabledStrategies() {
   return sqlite.prepare('SELECT * FROM strategies WHERE enabled = 1').all();
@@ -31,11 +38,8 @@ export function refreshRegistry() {
       name: row.name,
       triggers: row.triggers ? JSON.parse(row.triggers) : undefined
     };
-    const impl = new (class extends AbstractStrategy {
-      async execute() {
-        console.log(`[strategy] Executing ${this.ctx.name}`);
-      }
-    })(ctx);
+    const implClass = STRATEGY_MAP[row.name] ?? (class extends AbstractStrategy{execute(){}});
+    const impl = new implClass(ctx);
     const task = cron.schedule(row.cron || '*/5 * * * *', () => impl.execute());
     jobs[row.id] = { strategy: impl, task };
   }
@@ -60,5 +64,17 @@ export function stopStrategy(id: number) {
   }
 }
 
+export function ensureDefaultStrategies() {
+  const count = sqlite.prepare('SELECT COUNT(1) as c FROM strategies WHERE name = ?').get('WeeklyEducation');
+  if (!count.c) {
+    sqlite.prepare('INSERT INTO strategies (name, description, enabled, cron) VALUES (?,?,0, "0 10 * * 0")').run('WeeklyEducation','Weekly educational tip');
+  }
+  const tw = sqlite.prepare('SELECT COUNT(1) as c FROM strategies WHERE name = ?').get('TokenWatcher');
+  if (!tw.c) {
+    sqlite.prepare('INSERT INTO strategies (name, description, enabled, cron) VALUES (?,?,1, "0 * * * *")').run('TokenWatcher','Token usage monitor');
+  }
+}
+
 // initial load
+ensureDefaultStrategies();
 refreshRegistry(); 

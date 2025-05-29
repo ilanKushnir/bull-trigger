@@ -8,7 +8,7 @@ import sensible from '@fastify/sensible';
 import { fileURLToPath, pathToFileURL } from 'url';
 import path from 'path';
 import Database from 'better-sqlite3';
-import { refreshRegistry, runStrategyOnce } from './strategies/registry';
+import { refreshRegistry, runStrategyOnce, ensureDefaultStrategies } from './strategies/registry';
 
 const envSchema = {
   type: 'object',
@@ -21,6 +21,21 @@ const envSchema = {
 
 const DB_FILE_PATH = process.env.DB_FILE || path.resolve(process.cwd(), 'database.sqlite');
 const sqliteDb = new Database(DB_FILE_PATH);
+
+function ensureTokenSettings() {
+  const defaults = [
+    ['TOKEN_LIMIT','100000'],
+    ['TOKEN_USED','0'],
+    ['TOKEN_WARN','0.8'],
+    ['TOKEN_PANIC','0.95']
+  ];
+  for (const [k,v] of defaults) {
+    sqliteDb.prepare('INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)').run(k,v);
+  }
+}
+
+ensureTokenSettings();
+ensureDefaultStrategies();
 
 export const buildServer = async () => {
   const fastify = Fastify({ logger: true });
@@ -64,6 +79,11 @@ export const buildServer = async () => {
 
   fastify.post<{ Params: { id: string } }>('/api/strategies/:id/run', async (req) => {
     runStrategyOnce(Number(req.params.id));
+    return { ok: true };
+  });
+
+  fastify.put('/api/settings/tokenReset', async () => {
+    sqliteDb.prepare('UPDATE settings SET value = 0 WHERE key = "TOKEN_USED"').run();
     return { ok: true };
   });
 

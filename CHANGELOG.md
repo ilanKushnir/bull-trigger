@@ -29,3 +29,7 @@ DB-driven strategy registry with scheduler and REST endpoints.
 ## [step-9] signal pipeline, dedup, reaction flow - 2024-05-30
 
 Signal formatting, dispatch, 72h dedup and DB message tracking. 
+
+## [step-10] education + token watcher - 2024-05-30
+
+Auxiliary strategies added: WeeklyEducation, TokenWatcher; token reset endpoint. 
