@@ -2,27 +2,20 @@ import Fastify from 'fastify';
 import fp from 'fastify-plugin';
 import fs from 'fs';
 import dotenvSafe from 'dotenv-safe';
+import { getNowIso } from '@crypto-kush/common';
 
-// Load environment variables with validation against .env.example.
-// Variables may be provided via Docker secrets as files under /run/secrets.
 function loadEnv() {
-  // Pass through example for dotenv-safe validation.
   dotenvSafe.config({ example: '.env.example', allowEmptyValues: true });
-
-  // Support Docker secrets path
   if (!process.env.OPENAI_KEY) {
     try {
       const secret = fs.readFileSync('/run/secrets/openai_key', 'utf8').trim();
       process.env.OPENAI_KEY = secret;
-    } catch (_) {
-      // ignore if not present
-    }
+    } catch (_) {}
   }
 }
 
 loadEnv();
 
-// Register fastify-env for schema-based validation
 const envSchema = {
   type: 'object',
   required: ['OPENAI_KEY'],
@@ -32,21 +25,20 @@ const envSchema = {
   }
 };
 
-async function envPlugin(fastify) {
+async function envPlugin(fastify: Fastify.FastifyInstance) {
+  //@ts-ignore
   await fastify.register(import('fastify-env'), {
     schema: envSchema,
     data: process.env,
-    dotenv: false // already loaded above
+    dotenv: false
   });
 }
 
 const buildServer = async () => {
   const fastify = Fastify({ logger: true });
-
   await fastify.register(fp(envPlugin));
-
   fastify.get('/health', async () => ({ status: 'ok' }));
-
+  fastify.get('/time', async () => ({ now: getNowIso() }));
   return fastify;
 };
 

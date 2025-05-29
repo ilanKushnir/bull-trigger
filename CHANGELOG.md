@@ -1,3 +1,7 @@
+## [step-3] Common package added - 2024-05-29
+
+Shared DTOs, Zod schemas and utilities extracted to `@crypto-kush/common`.
+
 ## [step-1] OSS bootstrap - 2024-05-29
 
 Initial open-source repository scaffold created. 

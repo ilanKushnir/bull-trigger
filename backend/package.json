@@ -1,16 +1,23 @@
 {
   "name": "@bull-trigger/backend",
   "version": "0.1.0",
-  "main": "src/index.js",
+  "main": "dist/index.js",
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "dev": "node src/index.js",
-    "start": "node src/index.js"
+    "dev": "ts-node --esm src/index.ts",
+    "build": "tsc -p .",
+    "start": "node dist/index.js"
   },
   "dependencies": {
     "fastify": "^4.27.2",
     "fastify-env": "^6.0.0",
-    "dotenv-safe": "^8.2.0"
+    "dotenv-safe": "^8.2.0",
+    "@crypto-kush/common": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "ts-node": "^10.9.1",
+    "@types/node": "^20.6.0"
   }
 } 
