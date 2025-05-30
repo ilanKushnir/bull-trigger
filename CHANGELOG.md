@@ -33,3 +33,7 @@ Signal formatting, dispatch, 72h dedup and DB message tracking.
 ## [step-10] education + token watcher - 2024-05-30
 
 Auxiliary strategies added: WeeklyEducation, TokenWatcher; token reset endpoint. 
+
+## [step-11A] dynamic flow tables + compiler - 2024-05-30
+
+Strategy builder DB tables, CRUD API, LangGraph compiler routes added. 

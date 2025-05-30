@@ -9,6 +9,9 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import path from 'path';
 import Database from 'better-sqlite3';
 import { refreshRegistry, runStrategyOnce, ensureDefaultStrategies } from './strategies/registry';
+import { strategyFlowRepo } from './repo/strategyFlowRepo';
+
+type FastifyType = import('fastify').FastifyInstance;
 
 const envSchema = {
   type: 'object',
@@ -85,6 +88,38 @@ export const buildServer = async () => {
   fastify.put('/api/settings/tokenReset', async () => {
     sqliteDb.prepare('UPDATE settings SET value = 0 WHERE key = "TOKEN_USED"').run();
     return { ok: true };
+  });
+
+  // Strategy flow endpoints
+  fastify.get('/api/strategies/:id/flow', async (req) => {
+    const id = Number(req.params.id);
+    const data = strategyFlowRepo.listFlow(id);
+    return data;
+  });
+
+  fastify.post('/api/strategies/:id/calls', async (req) => {
+    const id = Number(req.params.id);
+    const { order_idx, type, config } = req.body as any;
+    const callId = strategyFlowRepo.addCall(id, order_idx, type, config);
+    return { id: callId };
+  });
+
+  fastify.patch('/api/calls/:callId', async (req) => {
+    const callId = Number(req.params.callId);
+    strategyFlowRepo.updateCall(callId, req.body);
+    return { ok: true };
+  });
+
+  fastify.delete('/api/calls/:callId', async (req) => {
+    strategyFlowRepo.deleteCall(Number(req.params.callId));
+    return { ok: true };
+  });
+
+  fastify.post('/api/strategies/:id/edges', async (req) => {
+    const id = Number(req.params.id);
+    const { src_call_id, dst_strategy_id } = req.body as any;
+    const edgeId = strategyFlowRepo.addEdge(src_call_id, dst_strategy_id);
+    return { id: edgeId };
   });
 
   return fastify;

@@ -40,3 +40,17 @@ export const messages = sqliteTable('messages', {
   sentAt: text('sent_at'),
   reaction: text('reaction')
 });
+
+export const strategyCalls = sqliteTable('strategy_calls', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  strategyId: integer('strategy_id').notNull(),
+  orderIdx: integer('order_idx').notNull(),
+  type: text('type').notNull(),
+  configJson: text('config_json').notNull()
+});
+
+export const strategyEdges = sqliteTable('strategy_edges', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  srcCallId: integer('src_call_id').notNull(),
+  dstStrategyId: integer('dst_strategy_id').notNull()
+});
