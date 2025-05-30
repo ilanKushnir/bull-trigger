@@ -10,21 +10,26 @@ This repository contains the initial open-source scaffold for the Bull Trigger p
 - `frontend/` – Web client (React/Vite)
 - `packages/common/` – Shared libraries and tooling
 
-## Getting Started
+## Quick Start
 
-### Prerequisites
-
-- Node.js >= 18
-- Docker & Docker Compose
-- GNU Make (or compatible)
-
-### Setup
-
+### Dev
 ```bash
-make bootstrap       # install dependencies for all workspaces
-./scripts/setup.sh   # create .env from template
-make up              # start dev environment with Docker Compose
+make bootstrap
+make up            # http://localhost:5173
 ```
+
+### Prod
+```bash
+make prod-up       # nginx on :80, api on :3000
+```
+
+### Self-Host
+1. Set env vars in `.env` then `docker compose -f compose.prod.yml up -d`.
+2. Optional Telegram integration requires `TELEGRAM_BOT_TOKEN` + `CHAT_ID`.
+
+See full docs: https://<user>.github.io/crypto-kush
+
+![demo](docs/demo.gif)
 
 ## Telegram Setup
 
