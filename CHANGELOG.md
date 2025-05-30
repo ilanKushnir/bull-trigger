@@ -37,3 +37,7 @@ Auxiliary strategies added: WeeklyEducation, TokenWatcher; token reset endpoint.
 ## [step-11A] dynamic flow tables + compiler - 2024-05-30
 
 Strategy builder DB tables, CRUD API, LangGraph compiler routes added. 
+
+## [step-12] compose files ready - 2024-05-30
+
+Dev & prod Docker Compose, Dockerfiles, dockerignore, Make targets. 

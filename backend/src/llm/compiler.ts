@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { strategyFlowRepo } from '../repo/strategyFlowRepo';
 import { getLLM } from './router';
+import { execSync } from 'child_process';
 
 export function buildLangGraphFromDb(strategyId:number){
   const {calls,edges}=strategyFlowRepo.listFlow(strategyId);
@@ -42,5 +43,7 @@ export function exportGraphDot(strategyId:number){
   const dot=graph.toDot();
   const file=`/tmp/strategy_${strategyId}.dot`;
   fs.writeFileSync(file,dot);
-  return {dotPath:file, dot};
+  const svg=`/tmp/strategy_${strategyId}.svg`;
+  try{execSync(`dot -Tsvg ${file} -o ${svg}`);}catch{}
+  return {dotPath:file, svgPath:svg, dot};
 } 

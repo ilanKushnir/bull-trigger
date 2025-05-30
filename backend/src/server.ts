@@ -10,6 +10,8 @@ import path from 'path';
 import Database from 'better-sqlite3';
 import { refreshRegistry, runStrategyOnce, ensureDefaultStrategies } from './strategies/registry';
 import { strategyFlowRepo } from './repo/strategyFlowRepo';
+import fs from 'fs';
+import { exportGraphDot } from './utils/graphUtils';
 
 type FastifyType = import('fastify').FastifyInstance;
 
@@ -120,6 +122,19 @@ export const buildServer = async () => {
     const { src_call_id, dst_strategy_id } = req.body as any;
     const edgeId = strategyFlowRepo.addEdge(src_call_id, dst_strategy_id);
     return { id: edgeId };
+  });
+
+  fastify.post('/api/strategies/:id/compile', async (req) => {
+    const id = Number(req.params.id);
+    const { svgPath } = exportGraphDot(id);
+    return { svgPath };
+  });
+
+  fastify.get('/api/strategies/:id/preview', async (req, reply) => {
+    const id = Number(req.params.id);
+    const svg = `/tmp/strategy_${id}.svg`;
+    if (!fs.existsSync(svg)) return reply.code(404).send();
+    reply.type('image/svg+xml').send(fs.readFileSync(svg));
   });
 
   return fastify;
