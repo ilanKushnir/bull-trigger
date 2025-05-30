@@ -19,16 +19,16 @@ interface ExtendedSignal extends Signal {
 }
 
 // Icons as simple components
-const SignalIcon = () => <span>📈</span>;
-const BuyIcon = () => <span style={{ color: '#10B981' }}>📈</span>;
-const SellIcon = () => <span style={{ color: '#EF4444' }}>📉</span>;
-const HoldIcon = () => <span style={{ color: '#3B82F6' }}>⏸️</span>;
-const SearchIcon = () => <span>🔍</span>;
-const FilterIcon = () => <span>🔽</span>;
-const RefreshIcon = () => <span>🔄</span>;
-const DownloadIcon = () => <span>💾</span>;
-const ActivityIcon = () => <span>⚡</span>;
-const EyeIcon = () => <span>👁️</span>;
+const SignalIcon = () => <span className="text-lg">📈</span>;
+const BuyIcon = () => <span className="text-lg" style={{ color: '#10B981' }}>📈</span>;
+const SellIcon = () => <span className="text-lg" style={{ color: '#EF4444' }}>📉</span>;
+const HoldIcon = () => <span className="text-lg" style={{ color: '#3B82F6' }}>⏸️</span>;
+const SearchIcon = () => <span className="text-sm">🔍</span>;
+const FilterIcon = () => <span className="text-sm">🔽</span>;
+const RefreshIcon = () => <span className="text-sm">🔄</span>;
+const DownloadIcon = () => <span className="text-sm">💾</span>;
+const ActivityIcon = () => <span className="text-lg">⚡</span>;
+const EyeIcon = () => <span className="text-sm">👁️</span>;
 
 export default function Signals() {
   const [signals, setSignals] = useState<ExtendedSignal[]>([]);
@@ -171,11 +171,13 @@ export default function Signals() {
           </p>
         </div>
         <div className="flex space-x-3">
-          <Button variant="outline" onClick={handleRefresh} disabled={loading}>
-            <RefreshIcon /> {loading ? 'Refreshing...' : 'Refresh'}
+          <Button variant="outline" onClick={handleRefresh} disabled={loading} className="flex items-center space-x-1">
+            <RefreshIcon />
+            <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
           </Button>
-          <Button variant="outline">
-            <DownloadIcon /> Export
+          <Button variant="outline" className="flex items-center space-x-1">
+            <DownloadIcon />
+            <span>Export</span>
           </Button>
         </div>
       </div>
@@ -187,16 +189,18 @@ export default function Signals() {
             <Button
               onClick={() => setActiveTab('signals')}
               variant={activeTab === 'signals' ? 'default' : 'outline'}
-              className={activeTab === 'signals' ? 'bg-blue-600 text-white' : ''}
+              className={`flex items-center space-x-2 ${activeTab === 'signals' ? 'bg-blue-600 text-white' : ''}`}
             >
-              📊 Signals Table
+              <span>📊</span>
+              <span>Signals Table</span>
             </Button>
             <Button
               onClick={() => setActiveTab('analytics')}
               variant={activeTab === 'analytics' ? 'default' : 'outline'}
-              className={activeTab === 'analytics' ? 'bg-blue-600 text-white' : ''}
+              className={`flex items-center space-x-2 ${activeTab === 'analytics' ? 'bg-blue-600 text-white' : ''}`}
             >
-              📈 Performance Analytics
+              <span>📈</span>
+              <span>Performance Analytics</span>
             </Button>
           </div>
         </CardContent>

@@ -27,7 +27,7 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="flex h-16 items-center justify-center border-b border-gray-800">
         <div className="flex items-center space-x-2">
-          <Bot className="h-8 w-8 text-crypto-blue" />
+          <span className="text-2xl">🐂📈</span>
           <span className="text-xl font-bold bg-gradient-to-r from-crypto-blue to-crypto-purple bg-clip-text text-transparent">
             Bull Trigger
           </span>

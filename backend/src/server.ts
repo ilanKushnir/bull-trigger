@@ -14,6 +14,8 @@ import { strategyFlowRepo } from './repo/strategyFlowRepo';
 import fs from 'fs';
 import { exportGraphDot } from './utils/graphUtils';
 import { initializeWebSocketService, websocketService } from './websocket/websocketService';
+import { strategyExecutionService } from './services/strategyExecutionService';
+import { strategyFlowService } from './services/strategyFlowService';
 
 type FastifyType = import('fastify').FastifyInstance;
 
@@ -108,7 +110,20 @@ export const buildServer = async () => {
 
   fastify.get('/api/strategies', async () => {
     const rows = sqliteDb.prepare('SELECT * FROM strategies').all();
-    return rows;
+    
+    // Get metrics for each strategy
+    const strategiesWithMetrics = rows.map((strategy: any) => {
+      const metrics = strategyExecutionService.getStrategyMetrics(strategy.id);
+      return {
+        ...strategy,
+        totalRuns: metrics.totalRuns,
+        successRate: metrics.successRate,
+        lastRun: metrics.lastRun,
+        modelTier: 'cheap' // Default, could be made configurable
+      };
+    });
+    
+    return strategiesWithMetrics;
   });
 
   fastify.put<{ Params: { id: string }; Body: any }>('/api/strategies/:id', async (req, reply) => {
@@ -134,16 +149,76 @@ export const buildServer = async () => {
 
   fastify.post<{ Params: { id: string } }>('/api/strategies/:id/run', async (req) => {
     const strategyId = Number(req.params.id);
-    runStrategyOnce(strategyId);
     
-    // Broadcast strategy execution via WebSocket
-    websocketService?.broadcastAlert({
-      type: 'info',
-      message: `Strategy ${strategyId} executed manually`,
-      timestamp: new Date()
-    });
+    // Start tracking execution
+    const executionId = strategyExecutionService.startExecution(strategyId, 'manual');
     
-    return { ok: true };
+    try {
+      // Execute the strategy flow (API calls + model calls)
+      const flowResult = await strategyFlowService.executeStrategyFlow(strategyId, executionId);
+      
+      if (flowResult.success) {
+        // Mark execution as successful
+        strategyExecutionService.completeExecution(executionId);
+        
+        // Broadcast strategy execution via WebSocket
+        websocketService?.broadcastAlert({
+          type: 'info',
+          message: `Strategy ${strategyId} executed successfully`,
+          timestamp: new Date()
+        });
+        
+        return { 
+          ok: true, 
+          executionId,
+          variables: flowResult.variables,
+          logs: flowResult.logs
+        };
+      } else {
+        // Mark execution as failed
+        strategyExecutionService.failExecution(executionId, flowResult.error);
+        
+        websocketService?.broadcastAlert({
+          type: 'error',
+          message: `Strategy ${strategyId} execution failed: ${flowResult.error}`,
+          timestamp: new Date()
+        });
+        
+        return { 
+          ok: false, 
+          error: flowResult.error,
+          logs: flowResult.logs
+        };
+      }
+    } catch (error) {
+      // Mark execution as failed
+      strategyExecutionService.failExecution(executionId, error?.message || 'Unknown error');
+      throw error;
+    }
+  });
+
+  // New endpoint to get detailed metrics for all strategies
+  fastify.get('/api/strategies/metrics', async () => {
+    return strategyExecutionService.getAllStrategiesMetrics();
+  });
+
+  // New endpoint to get metrics for a specific strategy
+  fastify.get<{ Params: { id: string } }>('/api/strategies/:id/metrics', async (req) => {
+    const strategyId = Number(req.params.id);
+    return strategyExecutionService.getStrategyMetrics(strategyId);
+  });
+
+  // New endpoint to get execution history for a strategy
+  fastify.get<{ Params: { id: string } }>('/api/strategies/:id/executions', async (req) => {
+    const strategyId = Number(req.params.id);
+    const limit = Number(req.query?.limit) || 10;
+    return strategyExecutionService.getRecentExecutions(strategyId, limit);
+  });
+
+  // Endpoint to seed sample execution data (for development)
+  fastify.post('/api/strategies/seed-data', async () => {
+    strategyExecutionService.seedSampleData();
+    return { ok: true, message: 'Sample execution data seeded' };
   });
 
   fastify.put('/api/settings/tokenReset', async () => {
@@ -344,57 +419,87 @@ export const buildServer = async () => {
 
   // ===== END ADMIN MANAGEMENT =====
 
-  // Strategy flow endpoints
-  fastify.get('/api/strategies/:id/flow', async (req) => {
-    const id = Number(req.params.id);
-    const data = strategyFlowRepo.listFlow(id);
-    return data;
-  });
+  // ===== STRATEGY FLOW API ENDPOINTS =====
 
-  fastify.post('/api/strategies/:id/calls', async (req) => {
-    const id = Number(req.params.id);
-    const { order_idx, type, config } = req.body as any;
-    const callId = strategyFlowRepo.addCall(id, order_idx, type, config);
-    return { id: callId };
-  });
-
-  fastify.patch('/api/calls/:callId', async (req) => {
-    const callId = Number(req.params.callId);
-    strategyFlowRepo.updateCall(callId, req.body);
-    return { ok: true };
-  });
-
-  fastify.delete('/api/calls/:callId', async (req) => {
-    strategyFlowRepo.deleteCall(Number(req.params.callId));
-    return { ok: true };
-  });
-
-  fastify.post('/api/strategies/:id/edges', async (req) => {
-    const id = Number(req.params.id);
-    const { src_call_id, dst_strategy_id } = req.body as any;
-    const edgeId = strategyFlowRepo.addEdge(src_call_id, dst_strategy_id);
-    return { id: edgeId };
-  });
-
-  fastify.post('/api/strategies/:id/compile', async (req) => {
-    const id = Number(req.params.id);
-    const { svgPath } = exportGraphDot(id);
-    return { svgPath };
-  });
-
-  fastify.get('/api/strategies/:id/preview', async (req, reply) => {
-    const id = Number(req.params.id);
-    const svg = `/tmp/strategy_${id}.svg`;
-    if (!fs.existsSync(svg)) return reply.code(404).send();
-    reply.type('image/svg+xml').send(fs.readFileSync(svg));
-  });
-
+  // Create new strategy
   fastify.post('/api/strategies', async (req) => {
     const { name, description } = req.body as any;
     const res: any = sqliteDb
-      .prepare('INSERT INTO strategies (name, description, enabled, cron) VALUES (?,?,1, "*/5 * * * *")')
-      .run(name, description ?? null);
+      .prepare('INSERT INTO strategies (name, description, enabled, cron) VALUES (?, ?, 1, ?)')
+      .run(name, description ?? null, '*/5 * * * *');
     return { id: res.lastInsertRowid };
+  });
+
+  // Get strategy flow (API calls and model calls)
+  fastify.get<{ Params: { id: string } }>('/api/strategies/:id/flow', async (req) => {
+    const strategyId = Number(req.params.id);
+    return strategyFlowService.getStrategyFlow(strategyId);
+  });
+
+  // ===== API CALLS MANAGEMENT =====
+
+  // Get API calls for a strategy
+  fastify.get<{ Params: { id: string } }>('/api/strategies/:id/api-calls', async (req) => {
+    const strategyId = Number(req.params.id);
+    return strategyFlowService.getApiCallsByStrategy(strategyId);
+  });
+
+  // Create new API call
+  fastify.post<{ Params: { id: string }; Body: any }>('/api/strategies/:id/api-calls', async (req) => {
+    const strategyId = Number(req.params.id);
+    const apiCallData = { ...req.body, strategyId };
+    const id = strategyFlowService.createApiCall(apiCallData);
+    return { id };
+  });
+
+  // Update API call
+  fastify.put<{ Params: { id: string; apiCallId: string }; Body: any }>('/api/strategies/:id/api-calls/:apiCallId', async (req) => {
+    const apiCallId = Number(req.params.apiCallId);
+    strategyFlowService.updateApiCall(apiCallId, req.body);
+    return { ok: true };
+  });
+
+  // Delete API call
+  fastify.delete<{ Params: { id: string; apiCallId: string } }>('/api/strategies/:id/api-calls/:apiCallId', async (req) => {
+    const apiCallId = Number(req.params.apiCallId);
+    strategyFlowService.deleteApiCall(apiCallId);
+    return { ok: true };
+  });
+
+  // Test API call
+  fastify.post('/api/test-api-call', async (req) => {
+    const result = await strategyFlowService.testApiCall(req.body as any);
+    return result;
+  });
+
+  // ===== MODEL CALLS MANAGEMENT =====
+
+  // Get model calls for a strategy
+  fastify.get<{ Params: { id: string } }>('/api/strategies/:id/model-calls', async (req) => {
+    const strategyId = Number(req.params.id);
+    return strategyFlowService.getModelCallsByStrategy(strategyId);
+  });
+
+  // Create new model call
+  fastify.post<{ Params: { id: string }; Body: any }>('/api/strategies/:id/model-calls', async (req) => {
+    const strategyId = Number(req.params.id);
+    const modelCallData = { ...req.body, strategyId };
+    const id = strategyFlowService.createModelCall(modelCallData);
+    return { id };
+  });
+
+  // Update model call
+  fastify.put<{ Params: { id: string; modelCallId: string }; Body: any }>('/api/strategies/:id/model-calls/:modelCallId', async (req) => {
+    const modelCallId = Number(req.params.modelCallId);
+    strategyFlowService.updateModelCall(modelCallId, req.body);
+    return { ok: true };
+  });
+
+  // Delete model call
+  fastify.delete<{ Params: { id: string; modelCallId: string } }>('/api/strategies/:id/model-calls/:modelCallId', async (req) => {
+    const modelCallId = Number(req.params.modelCallId);
+    strategyFlowService.deleteModelCall(modelCallId);
+    return { ok: true };
   });
 
   return fastify;

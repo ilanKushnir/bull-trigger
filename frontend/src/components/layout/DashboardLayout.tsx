@@ -22,7 +22,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Sidebar */}
       <div className="w-64 bg-gray-900 border-r border-gray-700">
         <div className="p-6">
-          <h2 className="text-xl font-bold text-blue-400 mb-8">�� Bull Trigger</h2>
+          <h2 className="text-xl font-bold text-blue-400 mb-8">🐂 Bull Trigger</h2>
           <nav className="space-y-2">
             {navItems.map((item) => (
               <Link

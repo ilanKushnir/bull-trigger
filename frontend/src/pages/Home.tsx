@@ -7,16 +7,16 @@ import TradingChart from '../components/charts/TradingChart';
 import PriceChart from '../components/charts/PriceChart';
 
 // Icons as simple components
-const DatabaseIcon = () => <span>🗄️</span>;
-const BotIcon = () => <span>🤖</span>;
-const BrainIcon = () => <span>🧠</span>;
-const ZapIcon = () => <span>⚡</span>;
-const DollarIcon = () => <span>💰</span>;
-const AlertIcon = () => <span>🚨</span>;
-const SignalIcon = () => <span>📈</span>;
-const CheckIcon = () => <span>✅</span>;
-const WarningIcon = () => <span>⚠️</span>;
-const InfoIcon = () => <span>ℹ️</span>;
+const DatabaseIcon = () => <span className="text-lg">🗄️</span>;
+const BotIcon = () => <span className="text-lg">🤖</span>;
+const BrainIcon = () => <span className="text-lg">🧠</span>;
+const ZapIcon = () => <span className="text-lg">⚡</span>;
+const DollarIcon = () => <span className="text-lg">💰</span>;
+const AlertIcon = () => <span className="text-lg">🚨</span>;
+const SignalIcon = () => <span className="text-lg">📈</span>;
+const CheckIcon = () => <span className="text-sm">✅</span>;
+const WarningIcon = () => <span className="text-lg">⚠️</span>;
+const InfoIcon = () => <span className="text-lg">ℹ️</span>;
 
 interface SystemStats extends SystemHealth {
   isConnected: boolean;

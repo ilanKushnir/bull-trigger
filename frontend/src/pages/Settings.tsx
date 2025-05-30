@@ -4,14 +4,14 @@ import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 
 // Icons as simple components
-const SettingsIcon = () => <span>⚙️</span>;
-const BotIcon = () => <span>🤖</span>;
-const DollarIcon = () => <span>💰</span>;
-const KeyIcon = () => <span>🔑</span>;
-const SaveIcon = () => <span>💾</span>;
-const RefreshIcon = () => <span>🔄</span>;
-const AlertIcon = () => <span>⚠️</span>;
-const CheckIcon = () => <span>✅</span>;
+const SettingsIcon = () => <span className="text-lg">⚙️</span>;
+const BotIcon = () => <span className="text-lg">🤖</span>;
+const DollarIcon = () => <span className="text-lg">💰</span>;
+const KeyIcon = () => <span className="text-lg">🔑</span>;
+const SaveIcon = () => <span className="text-sm">💾</span>;
+const RefreshIcon = () => <span className="text-sm">🔄</span>;
+const AlertIcon = () => <span className="text-lg">⚠️</span>;
+const CheckIcon = () => <span className="text-sm">✅</span>;
 
 interface Setting {
   key: string;
@@ -283,8 +283,10 @@ export default function Settings() {
             onClick={handleSave}
             disabled={!hasChanges || isSaving}
             variant="success"
+            className="flex items-center space-x-1"
           >
-            <SaveIcon /> {isSaving ? 'Saving...' : 'Save Changes'}
+            <SaveIcon />
+            <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
           </Button>
         </div>
       </div>
@@ -331,9 +333,10 @@ export default function Settings() {
                 size="sm"
                 onClick={handleResetTokenUsage}
                 variant="error"
-                className="mt-2"
+                className="mt-2 flex items-center space-x-1"
               >
-                <RefreshIcon /> Reset Now
+                <RefreshIcon />
+                <span>Reset Now</span>
               </Button>
             </div>
           </div>
@@ -351,9 +354,10 @@ export default function Settings() {
                 size="sm"
                 onClick={handleSave}
                 disabled={isSaving}
-                className="ml-auto"
+                className="ml-auto flex items-center space-x-1"
               >
-                Save Now
+                <SaveIcon />
+                <span>Save Now</span>
               </Button>
             </div>
           </CardContent>
@@ -410,8 +414,9 @@ export default function Settings() {
                   Reset all settings to their default values. This cannot be undone.
                 </div>
               </div>
-              <Button variant="error">
-                Reset All
+              <Button variant="error" className="flex items-center space-x-1">
+                <AlertIcon />
+                <span>Reset All</span>
               </Button>
             </div>
             
@@ -423,8 +428,9 @@ export default function Settings() {
                     Remove all signals, strategy history, and analytics data.
                   </div>
                 </div>
-                <Button variant="error">
-                  Clear Data
+                <Button variant="error" className="flex items-center space-x-1">
+                  <span>🗑️</span>
+                  <span>Clear Data</span>
                 </Button>
               </div>
             </div>

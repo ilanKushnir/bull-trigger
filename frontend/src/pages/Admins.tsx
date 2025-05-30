@@ -5,18 +5,18 @@ import { Button } from '../components/ui/button';
 import { useApi, Admin } from '../services/websocketService';
 
 // Icons as simple components
-const AdminIcon = () => <span>👤</span>;
-const SuperAdminIcon = () => <span>👑</span>;
-const UserIcon = () => <span>👥</span>;
-const EditIcon = () => <span>✏️</span>;
-const DeleteIcon = () => <span>🗑️</span>;
-const PlusIcon = () => <span>➕</span>;
-const TelegramIcon = () => <span>📱</span>;
-const EmailIcon = () => <span>📧</span>;
-const SaveIcon = () => <span>💾</span>;
-const CancelIcon = () => <span>❌</span>;
-const CheckIcon = () => <span>✅</span>;
-const WarningIcon = () => <span>⚠️</span>;
+const AdminIcon = () => <span className="text-lg">👤</span>;
+const SuperAdminIcon = () => <span className="text-lg">👑</span>;
+const UserIcon = () => <span className="text-lg">👥</span>;
+const EditIcon = () => <span className="text-sm">✏️</span>;
+const DeleteIcon = () => <span className="text-sm">🗑️</span>;
+const PlusIcon = () => <span className="text-sm">➕</span>;
+const TelegramIcon = () => <span className="text-sm">📱</span>;
+const EmailIcon = () => <span className="text-sm">📧</span>;
+const SaveIcon = () => <span className="text-sm">💾</span>;
+const CancelIcon = () => <span className="text-sm">❌</span>;
+const CheckIcon = () => <span className="text-sm">✅</span>;
+const WarningIcon = () => <span className="text-lg">⚠️</span>;
 
 export default function Admins() {
   const [admins, setAdmins] = useState<Admin[]>([]);
@@ -202,10 +202,11 @@ export default function Admins() {
           </p>
         </div>
         <Button 
-          className="bg-blue-600 hover:bg-blue-700"
+          className="bg-blue-600 hover:bg-blue-700 flex items-center space-x-2"
           onClick={() => setShowCreateForm(true)}
         >
-          <PlusIcon /> Add User
+          <PlusIcon />
+          <span>Add User</span>
         </Button>
       </div>
 
@@ -218,7 +219,9 @@ export default function Admins() {
                 <p className="text-sm text-gray-400">Total Admins</p>
                 <p className="text-2xl font-bold text-green-500">{admins.length}</p>
               </div>
-              <SuperAdminIcon />
+              <div className="flex items-center justify-center w-10 h-10 bg-green-600/20 rounded-lg">
+                <SuperAdminIcon />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -230,7 +233,9 @@ export default function Admins() {
                 <p className="text-sm text-gray-400">Total Users</p>
                 <p className="text-2xl font-bold text-blue-400">{allUsers.length}</p>
               </div>
-              <UserIcon />
+              <div className="flex items-center justify-center w-10 h-10 bg-blue-600/20 rounded-lg">
+                <UserIcon />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -244,7 +249,9 @@ export default function Admins() {
                   {allUsers.filter(u => u.telegramId).length}
                 </p>
               </div>
-              <TelegramIcon />
+              <div className="flex items-center justify-center w-10 h-10 bg-purple-600/20 rounded-lg">
+                <TelegramIcon />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -257,16 +264,18 @@ export default function Admins() {
             <Button
               onClick={() => setActiveTab('admins')}
               variant={activeTab === 'admins' ? 'default' : 'outline'}
-              className={activeTab === 'admins' ? 'bg-blue-600 text-white' : ''}
+              className={`flex items-center space-x-2 ${activeTab === 'admins' ? 'bg-blue-600 text-white' : ''}`}
             >
-              👑 Admins Only ({admins.length})
+              <span>👑</span>
+              <span>Admins Only ({admins.length})</span>
             </Button>
             <Button
               onClick={() => setActiveTab('all')}
               variant={activeTab === 'all' ? 'default' : 'outline'}
-              className={activeTab === 'all' ? 'bg-blue-600 text-white' : ''}
+              className={`flex items-center space-x-2 ${activeTab === 'all' ? 'bg-blue-600 text-white' : ''}`}
             >
-              👥 All Users ({allUsers.length})
+              <span>👥</span>
+              <span>All Users ({allUsers.length})</span>
             </Button>
           </div>
         </CardContent>
@@ -330,6 +339,7 @@ export default function Admins() {
                           size="sm"
                           variant="outline"
                           onClick={() => handleEdit(user)}
+                          className="flex items-center"
                         >
                           <EditIcon />
                         </Button>
@@ -337,7 +347,7 @@ export default function Admins() {
                           size="sm"
                           variant="outline"
                           onClick={() => handleDelete(user)}
-                          className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white"
+                          className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white flex items-center"
                         >
                           <DeleteIcon />
                         </Button>
@@ -364,6 +374,7 @@ export default function Admins() {
                 size="sm" 
                 onClick={resetForm}
                 variant="outline"
+                className="flex items-center"
               >
                 <CancelIcon />
               </Button>
@@ -471,18 +482,19 @@ export default function Admins() {
                 <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="bg-green-600 hover:bg-green-700"
+                  className="bg-green-600 hover:bg-green-700 flex items-center space-x-1"
                 >
                   <SaveIcon />
-                  {isSubmitting ? 'Saving...' : editingUser ? 'Update User' : 'Create User'}
+                  <span>{isSubmitting ? 'Saving...' : editingUser ? 'Update User' : 'Create User'}</span>
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={resetForm}
+                  className="flex items-center space-x-1"
                 >
                   <CancelIcon />
-                  Cancel
+                  <span>Cancel</span>
                 </Button>
               </div>
             </form>

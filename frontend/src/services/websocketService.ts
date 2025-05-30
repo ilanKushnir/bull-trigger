@@ -56,6 +56,11 @@ export interface Strategy {
   triggers?: any;
   created_at?: string;
   updated_at?: string;
+  totalRuns?: number;
+  successRate?: number;
+  lastRun?: string;
+  nextRun?: string;
+  modelTier?: string;
 }
 
 export interface Admin {
@@ -86,7 +91,7 @@ class ApiService {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000';
+    this.baseUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001';
   }
 
   private async request<T>(
@@ -152,6 +157,80 @@ class ApiService {
     return this.request<{ id: number }>('/api/strategies', {
       method: 'POST',
       body: JSON.stringify(strategy),
+    });
+  }
+
+  async getStrategyMetrics(): Promise<ApiResponse<any[]>> {
+    return this.request<any[]>('/api/strategies/metrics');
+  }
+
+  async getStrategyMetricsById(id: number): Promise<ApiResponse<any>> {
+    return this.request<any>(`/api/strategies/${id}/metrics`);
+  }
+
+  async getStrategyExecutions(id: number, limit: number = 10): Promise<ApiResponse<any[]>> {
+    return this.request<any[]>(`/api/strategies/${id}/executions?limit=${limit}`);
+  }
+
+  // ===== STRATEGY FLOW API =====
+  async getStrategyFlow(id: number): Promise<ApiResponse<any>> {
+    return this.request<any>(`/api/strategies/${id}/flow`);
+  }
+
+  // API Calls Management
+  async getApiCalls(strategyId: number): Promise<ApiResponse<any[]>> {
+    return this.request<any[]>(`/api/strategies/${strategyId}/api-calls`);
+  }
+
+  async createApiCall(strategyId: number, apiCall: any): Promise<ApiResponse<{ id: number }>> {
+    return this.request<{ id: number }>(`/api/strategies/${strategyId}/api-calls`, {
+      method: 'POST',
+      body: JSON.stringify(apiCall),
+    });
+  }
+
+  async updateApiCall(strategyId: number, apiCallId: number, updates: any): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>(`/api/strategies/${strategyId}/api-calls/${apiCallId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deleteApiCall(strategyId: number, apiCallId: number): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>(`/api/strategies/${strategyId}/api-calls/${apiCallId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async testApiCall(apiCall: any): Promise<ApiResponse<any>> {
+    return this.request<any>('/api/test-api-call', {
+      method: 'POST',
+      body: JSON.stringify(apiCall),
+    });
+  }
+
+  // Model Calls Management
+  async getModelCalls(strategyId: number): Promise<ApiResponse<any[]>> {
+    return this.request<any[]>(`/api/strategies/${strategyId}/model-calls`);
+  }
+
+  async createModelCall(strategyId: number, modelCall: any): Promise<ApiResponse<{ id: number }>> {
+    return this.request<{ id: number }>(`/api/strategies/${strategyId}/model-calls`, {
+      method: 'POST',
+      body: JSON.stringify(modelCall),
+    });
+  }
+
+  async updateModelCall(strategyId: number, modelCallId: number, updates: any): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>(`/api/strategies/${strategyId}/model-calls/${modelCallId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deleteModelCall(strategyId: number, modelCallId: number): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>(`/api/strategies/${strategyId}/model-calls/${modelCallId}`, {
+      method: 'DELETE',
     });
   }
 
@@ -223,7 +302,7 @@ class WebSocketClient {
   private reconnectDelay = 1000;
   private listeners: Map<string, EventCallback[]> = new Map();
 
-  public connect(url: string = 'http://localhost:3000'): void {
+  public connect(url: string = 'http://localhost:3001'): void {
     if (this.socket?.connected) {
       console.log('🔌 WebSocket already connected');
       return;
@@ -399,7 +478,7 @@ class WebSocketClient {
       strategy: 'Test Strategy'
     };
 
-    fetch('http://localhost:3000/api/signals', {
+    fetch('http://localhost:3001/api/signals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(testSignal)
@@ -440,6 +519,19 @@ export function useApi() {
     updateStrategy: apiService.updateStrategy.bind(apiService),
     runStrategy: apiService.runStrategy.bind(apiService),
     createStrategy: apiService.createStrategy.bind(apiService),
+    getStrategyMetrics: apiService.getStrategyMetrics.bind(apiService),
+    getStrategyMetricsById: apiService.getStrategyMetricsById.bind(apiService),
+    getStrategyExecutions: apiService.getStrategyExecutions.bind(apiService),
+    getStrategyFlow: apiService.getStrategyFlow.bind(apiService),
+    getApiCalls: apiService.getApiCalls.bind(apiService),
+    createApiCall: apiService.createApiCall.bind(apiService),
+    updateApiCall: apiService.updateApiCall.bind(apiService),
+    deleteApiCall: apiService.deleteApiCall.bind(apiService),
+    testApiCall: apiService.testApiCall.bind(apiService),
+    getModelCalls: apiService.getModelCalls.bind(apiService),
+    createModelCall: apiService.createModelCall.bind(apiService),
+    updateModelCall: apiService.updateModelCall.bind(apiService),
+    deleteModelCall: apiService.deleteModelCall.bind(apiService),
     
     // System
     getSystemHealth: apiService.getSystemHealth.bind(apiService),
