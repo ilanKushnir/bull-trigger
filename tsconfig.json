@@ -9,8 +9,8 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "@crypto-kush/common/*": ["packages/common/src/*"],
-      "@crypto-kush/common": ["packages/common/src/index.ts"]
+      "@bull-trigger/common/*": ["packages/common/src/*"],
+      "@bull-trigger/common": ["packages/common/src/index.ts"]
     },
     "types": ["node"]
   }

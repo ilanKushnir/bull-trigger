@@ -27,7 +27,9 @@ make prod-up       # nginx on :80, api on :3000
 1. Set env vars in `.env` then `docker compose -f compose.prod.yml up -d`.
 2. Optional Telegram integration requires `TELEGRAM_BOT_TOKEN` + `CHAT_ID`.
 
-See full docs: https://<user>.github.io/crypto-kush
+## ✨ Contributing & Feedback
+
+See full docs: https://<user>.github.io/bull-trigger
 
 ![demo](docs/demo.gif)
 

@@ -29,7 +29,7 @@ export default function Sidebar() {
         <div className="flex items-center space-x-2">
           <Bot className="h-8 w-8 text-crypto-blue" />
           <span className="text-xl font-bold bg-gradient-to-r from-crypto-blue to-crypto-purple bg-clip-text text-transparent">
-            Crypto‑Kush
+            Bull Trigger
           </span>
         </div>
       </div>

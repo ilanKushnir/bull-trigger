@@ -3,8 +3,10 @@ import Fastify from 'fastify';
 import fastifyEnv from '@fastify/env';
 import fs from 'fs';
 import dotenvSafe from 'dotenv-safe';
-import { getNowIso } from '@crypto-kush/common';
+import { getNowIso } from '@bull-trigger/common';
 import path from 'path';
+import { execSync } from 'child_process';
+import { refreshRegistry } from './strategies/registry';
 
 function loadEnv() {
   const backendDir = process.cwd();

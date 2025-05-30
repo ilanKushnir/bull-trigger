@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { signalSchema } from '@crypto-kush/common';
+import { signalSchema } from '@bull-trigger/common';
 import { Markup } from 'telegraf';
 
 export function formatSignal(signal: any) {

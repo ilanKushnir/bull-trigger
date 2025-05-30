@@ -12,6 +12,7 @@ import { refreshRegistry, runStrategyOnce, ensureDefaultStrategies } from './str
 import { strategyFlowRepo } from './repo/strategyFlowRepo';
 import fs from 'fs';
 import { exportGraphDot } from './utils/graphUtils';
+import { initializeWebSocketService, websocketService } from './websocket/websocketService';
 
 type FastifyType = import('fastify').FastifyInstance;
 
@@ -43,7 +44,19 @@ ensureTokenSettings();
 ensureDefaultStrategies();
 
 export const buildServer = async () => {
-  const fastify = Fastify({ logger: true });
+  const fastify = Fastify({ 
+    logger: true,
+    serverFactory: (handler, opts) => {
+      const server = require('http').createServer((req, res) => {
+        handler(req, res);
+      });
+      
+      // Initialize WebSocket service
+      initializeWebSocketService(server, sqliteDb);
+      
+      return server;
+    }
+  });
 
   await fastify.register(envPlugin, { schema: envSchema, dotenv: true, data: process.env });
 
@@ -62,7 +75,21 @@ export const buildServer = async () => {
     routePrefix: '/docs/api'
   });
 
-  fastify.get('/healthz', async () => ({ status: 'ok' }));
+  fastify.get('/healthz', async () => ({ 
+    status: 'ok',
+    websocket: {
+      enabled: true,
+      activeConnections: websocketService?.getActiveConnections() || 0
+    }
+  }));
+
+  // WebSocket status endpoint
+  fastify.get('/api/websocket/status', async () => {
+    return {
+      enabled: !!websocketService,
+      activeConnections: websocketService?.getActiveConnections() || 0
+    };
+  });
 
   fastify.get('/api/strategies', async () => {
     const rows = sqliteDb.prepare('SELECT * FROM strategies').all();
@@ -79,17 +106,106 @@ export const buildServer = async () => {
       triggers: JSON.stringify(body.triggers ?? null)
     });
     refreshRegistry();
+    
+    // Broadcast strategy update via WebSocket
+    websocketService?.broadcastStrategyUpdate(id, {
+      enabled: body.enabled,
+      cron: body.cron,
+      triggers: body.triggers
+    });
+    
     return { ok: true };
   });
 
   fastify.post<{ Params: { id: string } }>('/api/strategies/:id/run', async (req) => {
-    runStrategyOnce(Number(req.params.id));
+    const strategyId = Number(req.params.id);
+    runStrategyOnce(strategyId);
+    
+    // Broadcast strategy execution via WebSocket
+    websocketService?.broadcastAlert({
+      type: 'info',
+      message: `Strategy ${strategyId} executed manually`,
+      timestamp: new Date()
+    });
+    
     return { ok: true };
   });
 
   fastify.put('/api/settings/tokenReset', async () => {
     sqliteDb.prepare('UPDATE settings SET value = 0 WHERE key = "TOKEN_USED"').run();
+    
+    // Broadcast token reset via WebSocket
+    websocketService?.broadcastTokenUpdate();
+    websocketService?.broadcastAlert({
+      type: 'info',
+      message: 'Token usage counter reset',
+      timestamp: new Date()
+    });
+    
     return { ok: true };
+  });
+
+  // Live signals endpoint with WebSocket broadcasting
+  fastify.post('/api/signals', async (req) => {
+    const { symbol, signal, confidence, price, strategy } = req.body as any;
+    
+    // Store signal in database
+    const result: any = sqliteDb.prepare(`
+      INSERT INTO signals (symbol, signal, confidence, price, strategy, created_at) 
+      VALUES (?, ?, ?, ?, ?, datetime('now'))
+    `).run(symbol, signal, confidence, price, strategy);
+    
+    // Broadcast new signal via WebSocket
+    websocketService?.broadcastSignal({
+      id: result.lastInsertRowid.toString(),
+      symbol,
+      signal,
+      confidence,
+      price,
+      strategy,
+      timestamp: new Date()
+    });
+    
+    return { id: result.lastInsertRowid };
+  });
+
+  // Get recent signals
+  fastify.get('/api/signals', async () => {
+    try {
+      const signals = sqliteDb.prepare(`
+        SELECT * FROM signals 
+        ORDER BY created_at DESC 
+        LIMIT 50
+      `).all();
+      return signals;
+    } catch (error) {
+      return [];
+    }
+  });
+
+  // System health endpoint
+  fastify.get('/api/system/health', async () => {
+    const memoryUsage = process.memoryUsage();
+    const uptime = process.uptime();
+    
+    return {
+      status: 'healthy',
+      uptime,
+      memoryUsage,
+      websocketConnections: websocketService?.getActiveConnections() || 0
+    };
+  });
+
+  // Token usage endpoint
+  fastify.get('/api/tokens/usage', async () => {
+    const tokenLimit = Number((sqliteDb.prepare('SELECT value FROM settings WHERE key = "TOKEN_LIMIT"').get() as { value: string } | undefined)?.value || 100000);
+    const tokenUsed = Number((sqliteDb.prepare('SELECT value FROM settings WHERE key = "TOKEN_USED"').get() as { value: string } | undefined)?.value || 0);
+    
+    return {
+      used: tokenUsed,
+      limit: tokenLimit,
+      percentage: tokenUsed / tokenLimit
+    };
   });
 
   // Strategy flow endpoints
@@ -151,6 +267,9 @@ export const buildServer = async () => {
 export const start = async () => {
   const server = await buildServer();
   await server.listen({ port: Number(process.env.PORT) || 3000, host: '0.0.0.0' });
+  
+  console.log('🚀 Server started with WebSocket support');
+  console.log('📡 WebSocket endpoint: ws://localhost:' + (Number(process.env.PORT) || 3000));
 };
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

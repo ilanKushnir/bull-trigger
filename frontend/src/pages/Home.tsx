@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
+import { useWebSocket } from '../services/websocketService';
 
 // Icons as simple components
 const DatabaseIcon = () => <span>🗄️</span>;
@@ -15,291 +16,319 @@ const CheckIcon = () => <span>✅</span>;
 const WarningIcon = () => <span>⚠️</span>;
 const InfoIcon = () => <span>ℹ️</span>;
 
-interface SystemStatus {
-  database: 'healthy' | 'warning' | 'error';
-  telegram: 'connected' | 'disconnected' | 'error';
-  openai: 'healthy' | 'warning' | 'error';
-  strategies: {
-    total: number;
-    active: number;
-    running: number;
-  };
+interface SystemStats {
+  status: 'healthy' | 'warning' | 'error';
+  uptime: number;
+  memoryUsage: any;
+  activeConnections: number;
+  isConnected: boolean;
 }
 
-interface TokenUsage {
-  current: number;
+interface TokenData {
+  used: number;
   limit: number;
   percentage: number;
+  warning: boolean;
+  panic: boolean;
+}
+
+interface LiveSignal {
+  id: string;
+  symbol: string;
+  signal: 'BUY' | 'SELL' | 'HOLD';
+  confidence: number;
+  price: number;
+  timestamp: Date;
+  strategy: string;
 }
 
 interface Alert {
-  id: string;
-  type: 'warning' | 'error' | 'info' | 'success';
-  title: string;
+  type: 'info' | 'warning' | 'error';
   message: string;
   timestamp: Date;
 }
 
-interface RecentSignal {
-  id: string;
-  strategy: string;
-  type: 'BUY' | 'SELL' | 'HOLD';
-  symbol: string;
-  confidence: number;
-  timestamp: Date;
-  reactions: {
-    thumbsUp: number;
-    profit: number;
-    loss: number;
-  };
-}
-
 export default function Home() {
-  const [systemStatus] = useState<SystemStatus>({
-    database: 'healthy',
-    telegram: 'connected',
-    openai: 'healthy',
-    strategies: { total: 7, active: 5, running: 2 }
+  const [systemStats, setSystemStats] = useState<SystemStats>({
+    status: 'healthy',
+    uptime: 0,
+    memoryUsage: {},
+    activeConnections: 0,
+    isConnected: false
   });
-
-  const [tokenUsage] = useState<TokenUsage>({
-    current: 75000,
-    limit: 100000,
-    percentage: 75
-  });
-
-  const [alerts] = useState<Alert[]>([
-    {
-      id: '1',
-      type: 'warning',
-      title: 'Token Usage Alert',
-      message: 'Token usage at 75% - consider monitoring closely',
-      timestamp: new Date(Date.now() - 1000 * 60 * 30)
-    },
-    {
-      id: '2',
-      type: 'success',
-      title: 'Strategy Performance',
-      message: 'Signal Hunter strategy showing 85% accuracy this week',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2)
-    },
-    {
-      id: '3',
-      type: 'info',
-      title: 'System Update',
-      message: 'Successfully processed 142 signals today',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 4)
-    }
-  ]);
-
-  const [recentSignals] = useState<RecentSignal[]>([
-    {
-      id: '1',
-      strategy: 'Signal Hunter',
-      type: 'BUY',
-      symbol: 'BTC/USDT',
-      confidence: 87,
-      timestamp: new Date(Date.now() - 1000 * 60 * 15),
-      reactions: { thumbsUp: 12, profit: 8, loss: 2 }
-    },
-    {
-      id: '2',
-      strategy: 'Price Watcher',
-      type: 'SELL',
-      symbol: 'ETH/USDT',
-      confidence: 92,
-      timestamp: new Date(Date.now() - 1000 * 60 * 45),
-      reactions: { thumbsUp: 15, profit: 11, loss: 1 }
-    },
-    {
-      id: '3',
-      strategy: 'Volume Spike',
-      type: 'BUY',
-      symbol: 'ADA/USDT',
-      confidence: 78,
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
-      reactions: { thumbsUp: 7, profit: 3, loss: 4 }
-    }
-  ]);
-
-  const formatNumber = (num: number) => num.toLocaleString();
   
-  const getTimeAgo = (date: Date) => {
-    const minutes = Math.floor((Date.now() - date.getTime()) / 60000);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
+  const [tokenData, setTokenData] = useState<TokenData>({
+    used: 15420,
+    limit: 100000,
+    percentage: 0.1542,
+    warning: false,
+    panic: false
+  });
+  
+  const [recentSignals, setRecentSignals] = useState<LiveSignal[]>([
+    {
+      id: '1',
+      symbol: 'BTC/USDT',
+      signal: 'BUY',
+      confidence: 0.85,
+      price: 43250,
+      timestamp: new Date(Date.now() - 300000),
+      strategy: 'Signal Hunter'
+    },
+    {
+      id: '2',
+      symbol: 'ETH/USDT',
+      signal: 'SELL',
+      confidence: 0.72,
+      price: 2340,
+      timestamp: new Date(Date.now() - 600000),
+      strategy: 'Volume Spike'
+    }
+  ]);
+  
+  const [alerts, setAlerts] = useState<Alert[]>([
+    {
+      type: 'info',
+      message: 'System started successfully',
+      timestamp: new Date(Date.now() - 900000)
+    }
+  ]);
+
+  const [connectionLatency, setConnectionLatency] = useState<number>(0);
+  
+  const websocket = useWebSocket();
+
+  useEffect(() => {
+    // Connect to WebSocket server
+    websocket.connect('http://localhost:3000');
+    
+    // Subscribe to all relevant channels
+    websocket.subscribeToHealth();
+    websocket.subscribeToTokens();
+    websocket.subscribeToSignals();
+
+    // Set up event listeners
+    websocket.on('connection:status', (data: { connected: boolean }) => {
+      setSystemStats(prev => ({ ...prev, isConnected: data.connected }));
+    });
+
+    websocket.on('health:update', (data: any) => {
+      setSystemStats(prev => ({
+        ...prev,
+        status: data.status,
+        uptime: data.uptime,
+        memoryUsage: data.memoryUsage,
+        activeConnections: data.activeConnections
+      }));
+    });
+
+    websocket.on('tokens:update', (data: TokenData) => {
+      setTokenData(data);
+    });
+
+    websocket.on('signal:new', (signal: LiveSignal) => {
+      setRecentSignals(prev => [signal, ...prev.slice(0, 4)]);
+    });
+
+    websocket.on('signals:recent', (signals: LiveSignal[]) => {
+      setRecentSignals(signals.slice(0, 5));
+    });
+
+    websocket.on('alert:new', (alert: Alert) => {
+      setAlerts(prev => [alert, ...prev.slice(0, 4)]);
+    });
+
+    websocket.on('latency:update', (data: { latency: number }) => {
+      setConnectionLatency(data.latency);
+    });
+
+    // Ping every 10 seconds to measure latency
+    const pingInterval = setInterval(() => {
+      if (websocket.isConnected()) {
+        websocket.ping();
+      }
+    }, 10000);
+
+    return () => {
+      clearInterval(pingInterval);
+      websocket.off('connection:status');
+      websocket.off('health:update');
+      websocket.off('tokens:update');
+      websocket.off('signal:new');
+      websocket.off('signals:recent');
+      websocket.off('alert:new');
+      websocket.off('latency:update');
+    };
+  }, []);
+
+  const formatUptime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return `${hours}h ${minutes}m`;
   };
 
-  const getStatusBadge = (status: string) => {
+  const formatMemory = (bytes: number) => {
+    return `${Math.round(bytes / 1024 / 1024)}MB`;
+  };
+
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case 'healthy':
-      case 'connected':
-        return <Badge variant="success">Healthy</Badge>;
-      case 'warning':
-        return <Badge variant="warning">Warning</Badge>;
-      case 'error':
-      case 'disconnected':
-        return <Badge variant="error">Error</Badge>;
-      default:
-        return <Badge variant="default">{status}</Badge>;
+      case 'healthy': return 'success';
+      case 'warning': return 'warning';
+      case 'error': return 'error';
+      default: return 'default';
     }
   };
 
-  const getAlertIcon = (type: string) => {
-    switch (type) {
-      case 'success': return <CheckIcon />;
-      case 'warning': return <WarningIcon />;
-      case 'error': return <AlertIcon />;
-      default: return <InfoIcon />;
-    }
-  };
-
-  const getSignalIcon = (type: string) => {
-    switch (type) {
-      case 'BUY': return <span style={{ color: '#10B981' }}>📈</span>;
-      case 'SELL': return <span style={{ color: '#EF4444' }}>📉</span>;
-      default: return <SignalIcon />;
+  const getSignalColor = (signal: string) => {
+    switch (signal) {
+      case 'BUY': return 'success';
+      case 'SELL': return 'error';
+      case 'HOLD': return 'warning';
+      default: return 'default';
     }
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-blue-400 mb-2">
-          🚀 Dashboard Overview
-        </h1>
-        <p className="text-gray-400">
-          Monitor your crypto signal platform performance and system health
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-blue-400 mb-2">
+            🏠 Dashboard
+          </h1>
+          <p className="text-gray-400">
+            Real-time system monitoring and crypto signal analytics
+          </p>
+        </div>
+        
+        {/* Connection Status */}
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2">
+            <div className={`w-3 h-3 rounded-full ${systemStats.isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+            <span className="text-sm text-gray-400">
+              {systemStats.isConnected ? 'Connected' : 'Disconnected'}
+            </span>
+          </div>
+          {connectionLatency > 0 && (
+            <span className="text-xs text-gray-500">
+              {connectionLatency}ms
+            </span>
+          )}
+          <Button 
+            size="sm" 
+            onClick={() => websocket.sendTestSignal()}
+            variant="outline"
+          >
+            📡 Test Signal
+          </Button>
+        </div>
       </div>
 
-      {/* System Status Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* System Health Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-300">Database</CardTitle>
-            <DatabaseIcon />
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-gray-400">System Status</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center space-x-2">
-              {getStatusBadge(systemStatus.database)}
+              <Badge variant={getStatusColor(systemStats.status) as any}>
+                {systemStats.status.toUpperCase()}
+              </Badge>
+              <span className="text-2xl font-bold text-white">
+                {systemStats.isConnected ? '🟢' : '🔴'}
+              </span>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-300">Telegram Bot</CardTitle>
-            <BotIcon />
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center space-x-2">
-              {getStatusBadge(systemStatus.telegram)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-300">OpenAI API</CardTitle>
-            <BrainIcon />
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center space-x-2">
-              {getStatusBadge(systemStatus.openai)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-300">Active Strategies</CardTitle>
-            <ZapIcon />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">
-              {systemStatus.strategies.active}/{systemStatus.strategies.total}
-            </div>
-            <p className="text-xs text-gray-400">
-              {systemStatus.strategies.running} currently running
+            <p className="text-xs text-gray-500 mt-2">
+              Uptime: {formatUptime(systemStats.uptime)}
             </p>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-gray-400">Memory Usage</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-white">
+              {formatMemory(systemStats.memoryUsage.heapUsed || 0)}
+            </div>
+            <p className="text-xs text-gray-500">
+              / {formatMemory(systemStats.memoryUsage.heapTotal || 0)}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-gray-400">Active Connections</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-white">
+              {systemStats.activeConnections}
+            </div>
+            <p className="text-xs text-gray-500">WebSocket clients</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-gray-400">Signals Today</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-white">
+              {recentSignals.length}
+            </div>
+            <p className="text-xs text-gray-500">Recent signals</p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Token Usage Gauge */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-xl text-white flex items-center space-x-2">
-            <DollarIcon />
-            <span>Token Usage This Month</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-300">
-                {formatNumber(tokenUsage.current)} / {formatNumber(tokenUsage.limit)} tokens
-              </span>
-              <Badge variant={tokenUsage.percentage > 90 ? 'error' : tokenUsage.percentage > 80 ? 'warning' : 'success'}>
-                {tokenUsage.percentage}%
-              </Badge>
-            </div>
-
-            <div className="w-full bg-gray-700 rounded-full h-3">
-              <div 
-                className={`h-3 rounded-full transition-all duration-500 ${
-                  tokenUsage.percentage > 90 
-                    ? 'bg-red-500' 
-                    : tokenUsage.percentage > 80 
-                    ? 'bg-orange-500' 
-                    : 'bg-green-500'
-                }`}
-                style={{ width: `${Math.min(tokenUsage.percentage, 100)}%` }}
-              />
-            </div>
-
-            {tokenUsage.percentage > 80 && (
-              <div className="flex items-center space-x-2 text-orange-400">
-                <WarningIcon />
-                <span className="text-sm">
-                  {tokenUsage.percentage > 90 
-                    ? 'Critical: Consider adding more tokens or reducing usage'
-                    : 'Warning: Monitor token usage closely'
-                  }
-                </span>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Latest Alerts */}
+        {/* Token Usage Gauge */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl text-white flex items-center space-x-2">
-              <AlertIcon />
-              <span>Latest Alerts</span>
+            <CardTitle className="text-lg text-white flex items-center space-x-2">
+              <span>🪙</span>
+              <span>Token Usage</span>
+              {tokenData.warning && <Badge variant="warning">Warning</Badge>}
+              {tokenData.panic && <Badge variant="error">Critical</Badge>}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {alerts.map((alert) => (
-                <div key={alert.id} className="flex items-start space-x-3 p-3 bg-gray-900 rounded-lg">
-                  {getAlertIcon(alert.type)}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white">{alert.title}</p>
-                    <p className="text-xs text-gray-400 mt-1">{alert.message}</p>
-                    <p className="text-xs text-gray-500 mt-2">{getTimeAgo(alert.timestamp)}</p>
-                  </div>
-                  <Badge variant={alert.type as any}>{alert.type}</Badge>
-                </div>
-              ))}
+            <div className="relative w-32 h-32 mx-auto mb-4">
+              <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 36 36">
+                <path
+                  d="M18 2.0845
+                    a 15.9155 15.9155 0 0 1 0 31.831
+                    a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none"
+                  stroke="#374151"
+                  strokeWidth="3"
+                />
+                <path
+                  d="M18 2.0845
+                    a 15.9155 15.9155 0 0 1 0 31.831
+                    a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none"
+                  stroke={tokenData.panic ? "#EF4444" : tokenData.warning ? "#F59E0B" : "#10B981"}
+                  strokeWidth="3"
+                  strokeDasharray={`${tokenData.percentage * 100}, 100`}
+                  className="transition-all duration-500"
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-xl font-bold text-white">
+                  {Math.round(tokenData.percentage * 100)}%
+                </span>
+              </div>
+            </div>
+            <div className="text-center space-y-1">
+              <p className="text-white">
+                {tokenData.used.toLocaleString()} / {tokenData.limit.toLocaleString()}
+              </p>
+              <p className="text-xs text-gray-500">tokens used this month</p>
             </div>
           </CardContent>
         </Card>
@@ -307,33 +336,30 @@ export default function Home() {
         {/* Recent Signals */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl text-white flex items-center space-x-2">
-              <SignalIcon />
-              <span>Recent Signals</span>
+            <CardTitle className="text-lg text-white flex items-center space-x-2">
+              <span>📈</span>
+              <span>Live Signals</span>
+              <Badge variant="info">Real-time</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="space-y-3">
               {recentSignals.map((signal) => (
-                <div key={signal.id} className="flex items-center justify-between p-3 bg-gray-900 rounded-lg">
+                <div key={signal.id} className="flex items-center justify-between p-3 bg-gray-800 rounded">
                   <div className="flex items-center space-x-3">
-                    {getSignalIcon(signal.type)}
+                    <Badge variant={getSignalColor(signal.signal) as any}>
+                      {signal.signal}
+                    </Badge>
                     <div>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm font-medium text-white">{signal.symbol}</span>
-                        <Badge variant={signal.type === 'BUY' ? 'success' : signal.type === 'SELL' ? 'error' : 'info'}>
-                          {signal.type}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-gray-400">{signal.strategy}</p>
-                      <p className="text-xs text-gray-500">{getTimeAgo(signal.timestamp)}</p>
+                      <p className="text-white font-medium">{signal.symbol}</p>
+                      <p className="text-xs text-gray-500">{signal.strategy}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-medium text-white">{signal.confidence}%</div>
-                    <div className="text-xs text-gray-400">
-                      👍 {signal.reactions.thumbsUp} ✅ {signal.reactions.profit} ❌ {signal.reactions.loss}
-                    </div>
+                    <p className="text-white">${signal.price.toLocaleString()}</p>
+                    <p className="text-xs text-gray-500">
+                      {Math.round(signal.confidence * 100)}% confidence
+                    </p>
                   </div>
                 </div>
               ))}
@@ -341,6 +367,32 @@ export default function Home() {
           </CardContent>
         </Card>
       </div>
+
+      {/* System Alerts */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg text-white flex items-center space-x-2">
+            <span>🚨</span>
+            <span>System Alerts</span>
+            <Badge variant="info">Live</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {alerts.map((alert, index) => (
+              <div key={index} className="flex items-center space-x-3 p-2 bg-gray-800 rounded">
+                <Badge variant={alert.type === 'error' ? 'error' : alert.type === 'warning' ? 'warning' : 'info'}>
+                  {alert.type.toUpperCase()}
+                </Badge>
+                <span className="text-white flex-1">{alert.message}</span>
+                <span className="text-xs text-gray-500">
+                  {new Date(alert.timestamp).toLocaleTimeString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 } 
