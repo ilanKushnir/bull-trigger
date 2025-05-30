@@ -137,6 +137,14 @@ export const buildServer = async () => {
     reply.type('image/svg+xml').send(fs.readFileSync(svg));
   });
 
+  fastify.post('/api/strategies', async (req) => {
+    const { name, description } = req.body as any;
+    const res: any = sqliteDb
+      .prepare('INSERT INTO strategies (name, description, enabled, cron) VALUES (?,?,1, "*/5 * * * *")')
+      .run(name, description ?? null);
+    return { id: res.lastInsertRowid };
+  });
+
   return fastify;
 };
 

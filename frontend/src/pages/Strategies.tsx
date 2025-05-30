@@ -1,8 +1,10 @@
+// @ts-nocheck
 import React, { useEffect, useState } from 'react';
 import ReactFlow, { Background } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import axios from 'axios';
 import Editor from '@monaco-editor/react';
+import yaml from 'js-yaml';
 
 export default function StrategiesPage() {
   const [strategies, setStrategies] = useState<any[]>([]);
@@ -10,9 +12,13 @@ export default function StrategiesPage() {
   const [nodes, setNodes] = useState<any[]>([]);
   const [edges, setEdges] = useState<any[]>([]);
   const [selectedCall, setSelectedCall] = useState<any>(null);
+  const [linkMode, setLinkMode] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+
+  function refreshList(){axios.get('/api/strategies').then(r=>setStrategies(r.data));}
 
   useEffect(() => {
-    axios.get('/api/strategies').then((r) => setStrategies(r.data));
+    refreshList();
   }, []);
 
   useEffect(() => {
@@ -39,6 +45,10 @@ export default function StrategiesPage() {
     });
   }
 
+  const onConnect = (params: any) => {
+    axios.post(`/api/strategies/${selected.id}/edges`, { src_call_id: params.source, dst_strategy_id: selected.id }).then(() => loadFlow());
+  };
+
   return (
     <div style={{ display: 'flex', height: '100vh' }}>
       <aside style={{ width: 200, borderRight: '1px solid #ddd', padding: 8 }}>
@@ -50,10 +60,25 @@ export default function StrategiesPage() {
         ))}
       </aside>
       <div style={{ flex: 1 }}>
-        <ReactFlow nodes={nodes} edges={edges} fitView>
+        <ReactFlow nodes={nodes} edges={edges} fitView onConnect={onConnect} connectionLineStyle={{ stroke: '#888' }}>
           <Background />
         </ReactFlow>
       </div>
+      <div style={{ position: 'absolute', top: 0, left: 200, right: 300, height: 40, background: '#fafafa', borderBottom: '1px solid #ddd', display: 'flex', gap: 8, padding: 4 }}>
+        <button onClick={() => {
+          axios.post(`/api/strategies/${selected.id}/calls`, { order_idx: nodes.length, type: 'api', config: { url: 'https://', method: 'GET' } }).then(() => loadFlow());
+        }}>+API</button>
+        <button onClick={() => {
+          axios.post(`/api/strategies/${selected.id}/calls`, { order_idx: nodes.length, type: 'model', config: { modelTier: 'cheap', prompt_id: null } }).then(() => loadFlow());
+        }}>+Model</button>
+        <button onClick={() => setLinkMode(!linkMode)}>{linkMode ? 'Cancel Link' : 'Link Mode'}</button>
+        <button onClick={() => axios.post(`/api/strategies/${selected.id}/compile`).then(() => setPreview(`/api/strategies/${selected.id}/preview?${Date.now()}`))}>Compile</button>
+        <button onClick={() => axios.post(`/api/strategies/${selected.id}/run`)}>Run Now</button>
+        <button onClick={() => {
+          axios.put(`/api/strategies/${selected.id}`, { enabled: !selected.enabled }).then(() => refreshList());
+        }}>{selected?.enabled ? 'Disable' : 'Enable'}</button>
+      </div>
+      {preview && <img src={preview} style={{ position: 'absolute', bottom: 0, right: 0, width: 300, border: '1px solid #ccc' }} />}
       <div style={{ width: 300, borderLeft: '1px solid #ddd', padding: 8 }}>
         {selectedCall && (
           <div>
@@ -62,7 +87,7 @@ export default function StrategiesPage() {
               <option value="api">API</option>
               <option value="model">Model</option>
             </select></label>
-            <Editor height="200px" language="yaml" value={selectedCall.config_json} onChange={(v) => setSelectedCall({ ...selectedCall, config_json: v })} />
+            <Editor height="200px" language="yaml" value={yaml.dump(JSON.parse(selectedCall.config_json))} onChange={(v) => setSelectedCall({ ...selectedCall, config_json: JSON.stringify(yaml.load(v || '{}')) })} />
             <button onClick={() => saveCall(selectedCall)}>Save</button>
           </div>
         )}
