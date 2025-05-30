@@ -42,18 +42,28 @@ export default function Admins() {
 
   const fetchData = async () => {
     setLoading(true);
+    console.log('🔍 Fetching admin data...');
     
     const [adminsResult, usersResult] = await Promise.all([
       api.getAdmins(),
       api.getUsers()
     ]);
 
+    console.log('🔍 Admins result:', adminsResult);
+    console.log('🔍 Users result:', usersResult);
+
     if (adminsResult.success && adminsResult.data) {
+      console.log('✅ Setting admins:', adminsResult.data);
       setAdmins(adminsResult.data);
+    } else {
+      console.error('❌ Failed to fetch admins:', adminsResult.error);
     }
 
     if (usersResult.success && usersResult.data) {
+      console.log('✅ Setting users:', usersResult.data);
       setAllUsers(usersResult.data);
+    } else {
+      console.error('❌ Failed to fetch users:', usersResult.error);
     }
 
     setLoading(false);

@@ -205,10 +205,13 @@ class ApiService {
   }
 
   async validateTelegramId(telegramId: string): Promise<ApiResponse<{ available: boolean }>> {
-    return this.request<{ available: boolean }>('/api/admins/validate-telegram', {
+    console.log('🔍 Validating Telegram ID:', telegramId);
+    const result = await this.request<{ available: boolean }>('/api/admins/validate-telegram', {
       method: 'POST',
       body: JSON.stringify({ telegramId }),
     });
+    console.log('🔍 Telegram ID validation result:', result);
+    return result;
   }
 }
 

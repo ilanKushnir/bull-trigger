@@ -5,6 +5,7 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import helmet from '@fastify/helmet';
 import sensible from '@fastify/sensible';
+import cors from '@fastify/cors';
 import { fileURLToPath, pathToFileURL } from 'url';
 import path from 'path';
 import Database from 'better-sqlite3';
@@ -44,7 +45,37 @@ export const buildServer = async () => {
 
   await fastify.register(envPlugin, { schema: envSchema, dotenv: true, data: process.env });
 
-  await fastify.register(helmet);
+  await fastify.register(cors, {
+    origin: process.env.NODE_ENV === 'development' 
+      ? ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:3000']
+      : false,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+  });
+
+  console.log('✅ CORS plugin registered');
+
+  // Manual CORS hook as fallback
+  fastify.addHook('onRequest', async (request, reply) => {
+    const origin = request.headers.origin;
+    const allowedOrigins = ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:3000'];
+    
+    if (origin && allowedOrigins.includes(origin)) {
+      reply.header('Access-Control-Allow-Origin', origin);
+      reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      reply.header('Access-Control-Allow-Credentials', 'true');
+    }
+    
+    if (request.method === 'OPTIONS') {
+      reply.send();
+    }
+  });
+
+  // await fastify.register(helmet, {
+  //   crossOriginResourcePolicy: false
+  // });
   await fastify.register(sensible);
 
   await fastify.register(swagger, {
