@@ -5,9 +5,9 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "dev": "npm run migrate && tsx src/index.ts",
+    "dev": "npm run migrate && tsx src/server.ts",
     "build": "tsc -p .",
-    "start": "npm run migrate && node dist/index.js",
+    "start": "npm run migrate && node dist/server.js",
     "migrate": "tsx src/db/runMigrate.ts",
     "seed": "tsx src/db/seed.ts",
     "test": "vitest run",

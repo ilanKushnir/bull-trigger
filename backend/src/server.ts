@@ -25,37 +25,21 @@ const envSchema = {
   }
 };
 
-const DB_FILE_PATH = process.env.DB_FILE || path.resolve(process.cwd(), 'database.sqlite');
+// Determine the correct database path
+const cwd = process.cwd();
+const isInBackendDir = cwd.endsWith('/backend');
+const DB_FILE_PATH = process.env.DB_FILE || (isInBackendDir 
+  ? path.resolve(cwd, 'database.sqlite')
+  : path.resolve(cwd, 'backend/database.sqlite'));
+console.log('🔍 Database file path:', DB_FILE_PATH);
+console.log('🔍 Current working directory:', process.cwd());
 const sqliteDb = new Database(DB_FILE_PATH);
 
-function ensureTokenSettings() {
-  const defaults = [
-    ['TOKEN_LIMIT','100000'],
-    ['TOKEN_USED','0'],
-    ['TOKEN_WARN','0.8'],
-    ['TOKEN_PANIC','0.95']
-  ];
-  for (const [k,v] of defaults) {
-    sqliteDb.prepare('INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)').run(k,v);
-  }
-}
-
-ensureTokenSettings();
-ensureDefaultStrategies();
+// Note: ensureTokenSettings() will be called in start() function after database is ready
 
 export const buildServer = async () => {
   const fastify = Fastify({ 
-    logger: true,
-    serverFactory: (handler, opts) => {
-      const server = require('http').createServer((req, res) => {
-        handler(req, res);
-      });
-      
-      // Initialize WebSocket service
-      initializeWebSocketService(server, sqliteDb);
-      
-      return server;
-    }
+    logger: true
   });
 
   await fastify.register(envPlugin, { schema: envSchema, dotenv: true, data: process.env });
@@ -208,6 +192,127 @@ export const buildServer = async () => {
     };
   });
 
+  // ===== ADMIN MANAGEMENT ENDPOINTS =====
+  
+  // Get all admins
+  fastify.get('/api/admins', async () => {
+    try {
+      const admins = sqliteDb.prepare(`
+        SELECT id, email, name, telegram_id as telegramId, is_admin as isAdmin, created_at as createdAt 
+        FROM users 
+        WHERE is_admin = 1 
+        ORDER BY created_at DESC
+      `).all();
+      return admins;
+    } catch (error) {
+      return [];
+    }
+  });
+
+  // Get all users (including non-admins)
+  fastify.get('/api/users', async () => {
+    try {
+      const users = sqliteDb.prepare(`
+        SELECT id, email, name, telegram_id as telegramId, is_admin as isAdmin, created_at as createdAt 
+        FROM users 
+        ORDER BY created_at DESC
+      `).all();
+      return users;
+    } catch (error) {
+      return [];
+    }
+  });
+
+  // Create new admin/user
+  fastify.post('/api/admins', async (req) => {
+    const { email, name, telegramId, isAdmin } = req.body as any;
+    
+    try {
+      const result: any = sqliteDb.prepare(`
+        INSERT INTO users (email, name, telegram_id, is_admin) 
+        VALUES (?, ?, ?, ?)
+      `).run(email, name || null, telegramId || null, isAdmin ? 1 : 0);
+      
+      // Broadcast admin update via WebSocket
+      websocketService?.broadcastAlert({
+        type: 'info',
+        message: `New ${isAdmin ? 'admin' : 'user'} created: ${email}`,
+        timestamp: new Date()
+      });
+      
+      return { id: result.lastInsertRowid };
+    } catch (error: any) {
+      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+        return { error: 'Email or Telegram ID already exists' };
+      }
+      return { error: 'Failed to create user' };
+    }
+  });
+
+  // Update admin/user
+  fastify.put<{ Params: { id: string }; Body: any }>('/api/admins/:id', async (req) => {
+    const id = Number(req.params.id);
+    const { email, name, telegramId, isAdmin } = req.body;
+    
+    try {
+      sqliteDb.prepare(`
+        UPDATE users 
+        SET email = ?, name = ?, telegram_id = ?, is_admin = ? 
+        WHERE id = ?
+      `).run(email, name || null, telegramId || null, isAdmin ? 1 : 0, id);
+      
+      // Broadcast admin update via WebSocket
+      websocketService?.broadcastAlert({
+        type: 'info',
+        message: `User updated: ${email}`,
+        timestamp: new Date()
+      });
+      
+      return { ok: true };
+    } catch (error: any) {
+      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+        return { error: 'Email or Telegram ID already exists' };
+      }
+      return { error: 'Failed to update user' };
+    }
+  });
+
+  // Delete admin/user
+  fastify.delete<{ Params: { id: string } }>('/api/admins/:id', async (req) => {
+    const id = Number(req.params.id);
+    
+    try {
+      const user = sqliteDb.prepare('SELECT email FROM users WHERE id = ?').get(id) as { email: string } | undefined;
+      
+      sqliteDb.prepare('DELETE FROM users WHERE id = ?').run(id);
+      
+      // Broadcast admin deletion via WebSocket
+      websocketService?.broadcastAlert({
+        type: 'warning',
+        message: `User deleted: ${user?.email || 'Unknown'}`,
+        timestamp: new Date()
+      });
+      
+      return { ok: true };
+    } catch (error) {
+      return { error: 'Failed to delete user' };
+    }
+  });
+
+  // Validate Telegram ID endpoint
+  fastify.post('/api/admins/validate-telegram', async (req) => {
+    const { telegramId } = req.body as any;
+    
+    try {
+      const existing = sqliteDb.prepare('SELECT id FROM users WHERE telegram_id = ?').get(telegramId);
+      return { available: !existing };
+    } catch (error) {
+      return { error: 'Failed to validate Telegram ID' };
+    }
+  });
+
+  // ===== END ADMIN MANAGEMENT =====
+
   // Strategy flow endpoints
   fastify.get('/api/strategies/:id/flow', async (req) => {
     const id = Number(req.params.id);
@@ -264,9 +369,40 @@ export const buildServer = async () => {
   return fastify;
 };
 
+function ensureTokenSettings() {
+  console.log('🔍 Checking database tables...');
+  try {
+    const tables = sqliteDb.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+    console.log('🔍 Available tables:', tables);
+  } catch (error) {
+    console.error('🔍 Error listing tables:', error);
+  }
+  
+  const defaults = [
+    ['TOKEN_LIMIT','100000'],
+    ['TOKEN_USED','0'],
+    ['TOKEN_WARN','0.8'],
+    ['TOKEN_PANIC','0.95']
+  ];
+  for (const [k,v] of defaults) {
+    sqliteDb.prepare('INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)').run(k,v);
+  }
+}
+
 export const start = async () => {
   const server = await buildServer();
+  
+  // Start the Fastify server
   await server.listen({ port: Number(process.env.PORT) || 3000, host: '0.0.0.0' });
+  
+  // Initialize database settings first, before any services that might need them
+  ensureTokenSettings();
+  ensureDefaultStrategies();
+  refreshRegistry();
+  
+  // Initialize WebSocket service using the underlying HTTP server
+  const httpServer = server.server;
+  initializeWebSocketService(httpServer, sqliteDb);
   
   console.log('🚀 Server started with WebSocket support');
   console.log('📡 WebSocket endpoint: ws://localhost:' + (Number(process.env.PORT) || 3000));

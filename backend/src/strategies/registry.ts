@@ -6,7 +6,12 @@ import { AbstractStrategy, StrategyContext } from './abstract';
 import { WeeklyEducationStrategy } from './weeklyEducation';
 import { TokenWatcherStrategy } from './tokenWatcher';
 
-const DB_FILE = process.env.DB_FILE || path.resolve(process.cwd(), 'database.sqlite');
+// Use the same database path logic as server.ts
+const cwd = process.cwd();
+const isInBackendDir = cwd.endsWith('/backend');
+const DB_FILE = process.env.DB_FILE || (isInBackendDir 
+  ? path.resolve(cwd, 'database.sqlite')
+  : path.resolve(cwd, 'backend/database.sqlite'));
 const sqlite = new Database(DB_FILE);
 
 type JobEntry = {
@@ -67,14 +72,13 @@ export function stopStrategy(id: number) {
 export function ensureDefaultStrategies() {
   const count = sqlite.prepare('SELECT COUNT(1) as c FROM strategies WHERE name = ?').get('WeeklyEducation');
   if (!count.c) {
-    sqlite.prepare('INSERT INTO strategies (name, description, enabled, cron) VALUES (?,?,0, "0 10 * * 0")').run('WeeklyEducation','Weekly educational tip');
+    sqlite.prepare('INSERT INTO strategies (name, description, enabled, cron) VALUES (?, ?, ?, ?)').run('WeeklyEducation', 'Weekly educational tip', 0, '0 10 * * 0');
   }
   const tw = sqlite.prepare('SELECT COUNT(1) as c FROM strategies WHERE name = ?').get('TokenWatcher');
   if (!tw.c) {
-    sqlite.prepare('INSERT INTO strategies (name, description, enabled, cron) VALUES (?,?,1, "0 * * * *")').run('TokenWatcher','Token usage monitor');
+    sqlite.prepare('INSERT INTO strategies (name, description, enabled, cron) VALUES (?, ?, ?, ?)').run('TokenWatcher', 'Token usage monitor', 1, '0 * * * *');
   }
 }
 
-// initial load
-ensureDefaultStrategies();
-refreshRegistry(); 
+// Note: ensureDefaultStrategies() and refreshRegistry() should be called 
+// after database is fully initialized, not at module import time 

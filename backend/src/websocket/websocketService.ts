@@ -142,10 +142,35 @@ export class WebSocketService {
   }
 
   private getTokenUsage(): TokenUsage {
-    const tokenLimit = Number((this.db.prepare('SELECT value FROM settings WHERE key = "TOKEN_LIMIT"').get() as { value: string } | undefined)?.value || 100000);
-    const tokenUsed = Number((this.db.prepare('SELECT value FROM settings WHERE key = "TOKEN_USED"').get() as { value: string } | undefined)?.value || 0);
-    const tokenWarn = Number((this.db.prepare('SELECT value FROM settings WHERE key = "TOKEN_WARN"').get() as { value: string } | undefined)?.value || 0.8);
-    const tokenPanic = Number((this.db.prepare('SELECT value FROM settings WHERE key = "TOKEN_PANIC"').get() as { value: string } | undefined)?.value || 0.95);
+    let tokenLimit, tokenUsed, tokenWarn, tokenPanic;
+    
+    try {
+      tokenLimit = Number((this.db.prepare('SELECT value FROM settings WHERE key = "TOKEN_LIMIT"').get() as { value: string } | undefined)?.value || 100000);
+    } catch (error) {
+      console.warn('TOKEN_LIMIT setting not found, using default');
+      tokenLimit = 100000;
+    }
+    
+    try {
+      tokenUsed = Number((this.db.prepare('SELECT value FROM settings WHERE key = "TOKEN_USED"').get() as { value: string } | undefined)?.value || 0);
+    } catch (error) {
+      console.warn('TOKEN_USED setting not found, using default');
+      tokenUsed = 0;
+    }
+    
+    try {
+      tokenWarn = Number((this.db.prepare('SELECT value FROM settings WHERE key = "TOKEN_WARN"').get() as { value: string } | undefined)?.value || 0.8);
+    } catch (error) {
+      console.warn('TOKEN_WARN setting not found, using default');
+      tokenWarn = 0.8;
+    }
+    
+    try {
+      tokenPanic = Number((this.db.prepare('SELECT value FROM settings WHERE key = "TOKEN_PANIC"').get() as { value: string } | undefined)?.value || 0.95);
+    } catch (error) {
+      console.warn('TOKEN_PANIC setting not found, using default');
+      tokenPanic = 0.95;
+    }
 
     const percentage = tokenUsed / tokenLimit;
 

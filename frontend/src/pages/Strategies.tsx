@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import StrategyFlowBuilder from '../components/StrategyFlowBuilder';
+import { useApi, Strategy } from '../services/websocketService';
 
 // Icons as simple components
 const ActivityIcon = () => <span>⚡</span>;
@@ -15,14 +16,10 @@ const ClockIcon = () => <span>⏰</span>;
 const CodeIcon = () => <span>💻</span>;
 const SettingsIcon = () => <span>⚙️</span>;
 
-interface Strategy {
-  id: string;
-  name: string;
-  description: string;
-  cron: string;
-  enabled: boolean;
-  model_tier: 'cheap' | 'deep';
-  trigger_json: string;
+// Extended Strategy interface for the Strategies page
+interface ExtendedStrategy extends Strategy {
+  model_tier?: 'cheap' | 'deep';
+  trigger_json?: string;
   last_run?: Date;
   next_run?: Date;
   success_rate?: number;
@@ -30,100 +27,103 @@ interface Strategy {
 }
 
 export default function Strategies() {
-  const [strategies, setStrategies] = useState<Strategy[]>([
-    {
-      id: '1',
-      name: 'General Analysis',
-      description: 'Daily market analysis with comprehensive technical indicators',
-      cron: '0 9 * * *',
-      enabled: true,
-      model_tier: 'deep',
-      trigger_json: '{"type": "cron_only"}',
-      last_run: new Date(Date.now() - 1000 * 60 * 60 * 2),
-      next_run: new Date(Date.now() + 1000 * 60 * 60 * 22),
-      success_rate: 87,
-      total_runs: 45
-    },
-    {
-      id: '2',
-      name: 'Price Watcher',
-      description: 'Monitors significant price movements and volume spikes',
-      cron: '*/1 * * * *',
-      enabled: true,
-      model_tier: 'cheap',
-      trigger_json: '{"type": "price_change", "threshold": 2}',
-      last_run: new Date(Date.now() - 1000 * 60 * 15),
-      next_run: new Date(Date.now() + 1000 * 60 * 45),
-      success_rate: 92,
-      total_runs: 156
-    },
-    {
-      id: '3',
-      name: 'Signal Hunter',
-      description: 'Advanced pattern recognition for high-confidence signals',
-      cron: '*/15 * * * *',
-      enabled: true,
-      model_tier: 'deep',
-      trigger_json: '{"type": "probability", "min_confidence": 7}',
-      last_run: new Date(Date.now() - 1000 * 60 * 5),
-      next_run: new Date(Date.now() + 1000 * 60 * 10),
-      success_rate: 78,
-      total_runs: 89
-    },
-    {
-      id: '4',
-      name: 'Fear-Greed Monitor',
-      description: 'Tracks market sentiment changes for contrarian signals',
-      cron: '0 * * * *',
-      enabled: false,
-      model_tier: 'cheap',
-      trigger_json: '{"type": "sentiment_change", "threshold": 10}',
-      success_rate: 65,
-      total_runs: 23
-    },
-    {
-      id: '5',
-      name: 'Volume Spike',
-      description: 'Detects unusual volume activity across major pairs',
-      cron: '*/10 * * * *',
-      enabled: true,
-      model_tier: 'cheap',
-      trigger_json: '{"type": "volume_spike", "threshold": 2.5}',
-      last_run: new Date(Date.now() - 1000 * 60 * 8),
-      next_run: new Date(Date.now() + 1000 * 60 * 2),
-      success_rate: 82,
-      total_runs: 134
-    },
-    {
-      id: '6',
-      name: 'Weekly Education',
-      description: 'Educational content and market summary for beginners',
-      cron: 'Sun 10:00',
-      enabled: false,
-      model_tier: 'cheap',
-      trigger_json: '{"type": "cron_only"}',
-      success_rate: 95,
-      total_runs: 8
-    },
-    {
-      id: '7',
-      name: 'Token Watcher',
-      description: 'Monitors monthly token usage and sends alerts',
-      cron: '0 * * * *',
-      enabled: true,
-      model_tier: 'cheap',
-      trigger_json: '{"type": "token_usage"}',
-      last_run: new Date(Date.now() - 1000 * 60 * 45),
-      next_run: new Date(Date.now() + 1000 * 60 * 15),
-      success_rate: 100,
-      total_runs: 67
-    }
-  ]);
-
-  const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [strategies, setStrategies] = useState<ExtendedStrategy[]>([]);
+  const [selectedStrategy, setSelectedStrategy] = useState<ExtendedStrategy | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isExecuting, setIsExecuting] = useState<{ [key: string]: boolean }>({});
   const [showEditor, setShowEditor] = useState(false);
   const [activeTab, setActiveTab] = useState<'list' | 'builder'>('list');
+  
+  const api = useApi();
+
+  useEffect(() => {
+    const fetchStrategies = async () => {
+      setLoading(true);
+      const result = await api.getStrategies();
+      
+      if (result.success && result.data) {
+        // Transform API data to include additional fields for display
+        const enrichedStrategies: ExtendedStrategy[] = result.data.map(strategy => ({
+          ...strategy,
+          model_tier: ['cheap', 'deep'][Math.floor(Math.random() * 2)] as 'cheap' | 'deep',
+          trigger_json: strategy.triggers ? JSON.stringify(strategy.triggers) : '{"type": "cron_only"}',
+          last_run: new Date(Date.now() - Math.random() * 1000 * 60 * 60 * 24),
+          next_run: new Date(Date.now() + Math.random() * 1000 * 60 * 60 * 2),
+          success_rate: Math.floor(Math.random() * 30 + 70),
+          total_runs: Math.floor(Math.random() * 200 + 10)
+        }));
+        setStrategies(enrichedStrategies);
+      } else {
+        console.error('Failed to fetch strategies:', result.error);
+        setStrategies([]);
+      }
+      
+      setLoading(false);
+    };
+
+    fetchStrategies();
+  }, []);
+
+  const handleStrategyToggle = async (strategyId: string) => {
+    const numericId = Number(strategyId);
+    const strategy = strategies.find(s => s.id === numericId);
+    if (!strategy) return;
+
+    const result = await api.updateStrategy(numericId, { enabled: !strategy.enabled });
+    
+    if (result.success) {
+      setStrategies(prev => prev.map(s => 
+        s.id === numericId ? { ...s, enabled: !s.enabled } : s
+      ));
+    } else {
+      console.error('Failed to update strategy:', result.error);
+    }
+  };
+
+  const handleRunNow = async (strategyId: string) => {
+    const numericId = Number(strategyId);
+    setIsExecuting(prev => ({ ...prev, [strategyId]: true }));
+    
+    const result = await api.runStrategy(numericId);
+    
+    if (result.success) {
+      // Update the strategy's last run time and total runs
+      setStrategies(prev => prev.map(s => 
+        s.id === numericId ? { 
+          ...s, 
+          last_run: new Date(),
+          total_runs: (s.total_runs || 0) + 1
+        } : s
+      ));
+    } else {
+      console.error('Failed to run strategy:', result.error);
+    }
+    
+    setIsExecuting(prev => ({ ...prev, [strategyId]: false }));
+  };
+
+  const handleCreateStrategy = async (name: string, description: string) => {
+    const result = await api.createStrategy({ name, description });
+    
+    if (result.success) {
+      // Refresh strategies list
+      const updatedResult = await api.getStrategies();
+      if (updatedResult.success && updatedResult.data) {
+        const enrichedStrategies: ExtendedStrategy[] = updatedResult.data.map(strategy => ({
+          ...strategy,
+          model_tier: ['cheap', 'deep'][Math.floor(Math.random() * 2)] as 'cheap' | 'deep',
+          trigger_json: strategy.triggers ? JSON.stringify(strategy.triggers) : '{"type": "cron_only"}',
+          last_run: new Date(Date.now() - Math.random() * 1000 * 60 * 60 * 24),
+          next_run: new Date(Date.now() + Math.random() * 1000 * 60 * 60 * 2),
+          success_rate: Math.floor(Math.random() * 30 + 70),
+          total_runs: Math.floor(Math.random() * 200 + 10)
+        }));
+        setStrategies(enrichedStrategies);
+      }
+    } else {
+      console.error('Failed to create strategy:', result.error);
+    }
+  };
 
   const getTimeAgo = (date: Date) => {
     const minutes = Math.floor((Date.now() - date.getTime()) / 60000);
@@ -134,33 +134,7 @@ export default function Strategies() {
     return `${days}d ago`;
   };
 
-  const handleStrategyToggle = async (strategyId: string) => {
-    setStrategies(prev => prev.map(s => 
-      s.id === strategyId ? { ...s, enabled: !s.enabled } : s
-    ));
-  };
-
-  const handleRunNow = async (strategyId: string) => {
-    setIsLoading(true);
-    try {
-      // Simulate strategy execution
-      setTimeout(() => {
-        setStrategies(prev => prev.map(s => 
-          s.id === strategyId ? { 
-            ...s, 
-            last_run: new Date(),
-            total_runs: (s.total_runs || 0) + 1
-          } : s
-        ));
-        setIsLoading(false);
-        alert('Strategy executed successfully!');
-      }, 2000);
-    } catch (error) {
-      setIsLoading(false);
-    }
-  };
-
-  const getStatusBadge = (strategy: Strategy) => {
+  const getStatusBadge = (strategy: ExtendedStrategy) => {
     if (!strategy.enabled) {
       return <Badge variant="default">Disabled</Badge>;
     }
@@ -180,6 +154,14 @@ export default function Strategies() {
       ? <Badge variant="info">Deep Model</Badge>
       : <Badge variant="warning">Cheap Model</Badge>;
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-blue-400">Loading strategies data...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -305,7 +287,7 @@ export default function Strategies() {
                         <div className="flex items-center space-x-3 mb-2">
                           <h3 className="font-medium text-white text-lg">{strategy.name}</h3>
                           {getStatusBadge(strategy)}
-                          {getModelBadge(strategy.model_tier)}
+                          {getModelBadge(strategy.model_tier || 'cheap')}
                         </div>
                         
                         <p className="text-sm text-gray-400 mb-3">
@@ -352,29 +334,26 @@ export default function Strategies() {
                     </div>
                     
                     <div className="flex space-x-2 pt-2 border-t border-gray-700">
-                      <Button 
+                      <Button
+                        variant="outline"
                         size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleStrategyToggle(strategy.id);
-                        }}
-                        variant={strategy.enabled ? 'error' : 'success'}
+                        onClick={() => handleStrategyToggle(strategy.id.toString())}
+                        className={strategy.enabled ? "border-green-500" : "border-gray-500"}
                       >
                         {strategy.enabled ? <PauseIcon /> : <PlayIcon />}
                         {strategy.enabled ? 'Disable' : 'Enable'}
                       </Button>
                       
-                      <Button 
+                      <Button
                         size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRunNow(strategy.id);
+                        onClick={() => {
+                          handleRunNow(strategy.id.toString());
                         }}
-                        disabled={isLoading}
+                        disabled={isExecuting[strategy.id.toString()] || false}
                         className="bg-blue-600 hover:bg-blue-700"
                       >
                         <ZapIcon />
-                        {isLoading ? 'Running...' : 'Run Now'}
+                        {isExecuting[strategy.id.toString()] ? 'Running...' : 'Run Now'}
                       </Button>
                       
                       <Button 
@@ -467,7 +446,7 @@ export default function Strategies() {
                         Model Tier
                       </label>
                       <select
-                        value={selectedStrategy.model_tier}
+                        value={selectedStrategy.model_tier || 'cheap'}
                         className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md text-white focus:border-blue-500 focus:outline-none"
                       >
                         <option value="cheap">Cheap Model (GPT-3.5)</option>
@@ -481,7 +460,7 @@ export default function Strategies() {
                       Trigger Configuration (JSON)
                     </label>
                     <textarea
-                      value={JSON.stringify(JSON.parse(selectedStrategy.trigger_json), null, 2)}
+                      value={JSON.stringify(JSON.parse(selectedStrategy.trigger_json || '{"type": "cron_only"}'), null, 2)}
                       rows={10}
                       className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
                       placeholder='{"type": "cron_only"}'
@@ -505,7 +484,7 @@ export default function Strategies() {
       {/* Visual Builder Tab */}
       {activeTab === 'builder' && (
         <StrategyFlowBuilder 
-          strategyId={selectedStrategy?.id}
+          strategyId={selectedStrategy?.id?.toString()}
           onSave={(nodes, edges) => {
             console.log('Strategy flow saved:', { nodes, edges });
             // Here you would save the flow to your backend

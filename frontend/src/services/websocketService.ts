@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 
-interface SystemHealth {
+// === INTERFACES ===
+export interface SystemHealth {
   status: 'healthy' | 'warning' | 'error';
   uptime: number;
   memoryUsage: NodeJS.MemoryUsage;
@@ -8,7 +9,7 @@ interface SystemHealth {
   lastSignal?: Date;
 }
 
-interface TokenUsage {
+export interface TokenUsage {
   used: number;
   limit: number;
   percentage: number;
@@ -16,7 +17,7 @@ interface TokenUsage {
   panic: boolean;
 }
 
-interface LiveSignal {
+export interface LiveSignal {
   id: string;
   symbol: string;
   signal: 'BUY' | 'SELL' | 'HOLD';
@@ -26,14 +27,192 @@ interface LiveSignal {
   strategy: string;
 }
 
-interface Alert {
+export interface Signal {
+  id: string;
+  symbol: string;
+  signal: 'BUY' | 'SELL' | 'HOLD';
+  confidence: number;
+  price: number;
+  strategy: string;
+  created_at: string;
+  status?: 'active' | 'closed' | 'expired';
+  entry_price?: number;
+  current_price?: number;
+  pnl?: number;
+  reactions?: {
+    thumbsUp: number;
+    profit: number;
+    loss: number;
+  };
+  message?: string;
+}
+
+export interface Strategy {
+  id: number;
+  name: string;
+  description?: string;
+  enabled: boolean;
+  cron: string;
+  triggers?: any;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Admin {
+  id: number;
+  email: string;
+  name?: string;
+  telegramId?: string;
+  isAdmin: boolean;
+  createdAt: string;
+}
+
+export interface Alert {
   type: 'info' | 'warning' | 'error';
   message: string;
   timestamp: Date;
 }
 
+export interface ApiResponse<T> {
+  data?: T;
+  error?: string;
+  success: boolean;
+}
+
 type EventCallback = (data: any) => void;
 
+// === API SERVICE CLASS ===
+class ApiService {
+  private baseUrl: string;
+
+  constructor() {
+    this.baseUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000';
+  }
+
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    try {
+      const url = `${this.baseUrl}${endpoint}`;
+      const response = await fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+        ...options,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return { data, success: true };
+    } catch (error) {
+      console.error(`API request failed: ${endpoint}`, error);
+      return {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        success: false,
+      };
+    }
+  }
+
+  // ===== SIGNALS API =====
+  async getSignals(limit: number = 50): Promise<ApiResponse<Signal[]>> {
+    return this.request<Signal[]>(`/api/signals?limit=${limit}`);
+  }
+
+  async createSignal(signal: Omit<Signal, 'id' | 'created_at'>): Promise<ApiResponse<{ id: number }>> {
+    return this.request<{ id: number }>('/api/signals', {
+      method: 'POST',
+      body: JSON.stringify(signal),
+    });
+  }
+
+  // ===== STRATEGIES API =====
+  async getStrategies(): Promise<ApiResponse<Strategy[]>> {
+    return this.request<Strategy[]>('/api/strategies');
+  }
+
+  async updateStrategy(id: number, updates: Partial<Strategy>): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>(`/api/strategies/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async runStrategy(id: number): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>(`/api/strategies/${id}/run`, {
+      method: 'POST',
+    });
+  }
+
+  async createStrategy(strategy: { name: string; description?: string }): Promise<ApiResponse<{ id: number }>> {
+    return this.request<{ id: number }>('/api/strategies', {
+      method: 'POST',
+      body: JSON.stringify(strategy),
+    });
+  }
+
+  // ===== SYSTEM API =====
+  async getSystemHealth(): Promise<ApiResponse<SystemHealth>> {
+    return this.request<SystemHealth>('/api/system/health');
+  }
+
+  async getTokenUsage(): Promise<ApiResponse<TokenUsage>> {
+    return this.request<TokenUsage>('/api/tokens/usage');
+  }
+
+  async resetTokenUsage(): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>('/api/settings/tokenReset', {
+      method: 'PUT',
+    });
+  }
+
+  // ===== HEALTH CHECK =====
+  async healthCheck(): Promise<ApiResponse<{ status: string; websocket?: any }>> {
+    return this.request<{ status: string; websocket?: any }>('/healthz');
+  }
+
+  // ===== ADMIN MANAGEMENT =====
+  async getAdmins(): Promise<ApiResponse<Admin[]>> {
+    return this.request<Admin[]>('/api/admins');
+  }
+
+  async getUsers(): Promise<ApiResponse<Admin[]>> {
+    return this.request<Admin[]>('/api/users');
+  }
+
+  async createAdmin(admin: Omit<Admin, 'id' | 'createdAt'>): Promise<ApiResponse<{ id: number }>> {
+    return this.request<{ id: number }>('/api/admins', {
+      method: 'POST',
+      body: JSON.stringify(admin),
+    });
+  }
+
+  async updateAdmin(id: number, updates: Partial<Omit<Admin, 'id' | 'createdAt'>>): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>(`/api/admins/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deleteAdmin(id: number): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>(`/api/admins/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async validateTelegramId(telegramId: string): Promise<ApiResponse<{ available: boolean }>> {
+    return this.request<{ available: boolean }>('/api/admins/validate-telegram', {
+      method: 'POST',
+      body: JSON.stringify({ telegramId }),
+    });
+  }
+}
+
+// === WEBSOCKET CLIENT CLASS ===
 class WebSocketClient {
   private socket: Socket | null = null;
   private reconnectAttempts = 0;
@@ -225,7 +404,8 @@ class WebSocketClient {
   }
 }
 
-// Export a singleton instance
+// === EXPORTS ===
+export const apiService = new ApiService();
 export const websocketClient = new WebSocketClient();
 
 // React hook for easier integration
@@ -242,5 +422,34 @@ export function useWebSocket() {
     ping: websocketClient.ping.bind(websocketClient),
     isConnected: websocketClient.isConnected.bind(websocketClient),
     sendTestSignal: websocketClient.sendTestSignal.bind(websocketClient)
+  };
+}
+
+// React hook for API calls
+export function useApi() {
+  return {
+    // Signals
+    getSignals: apiService.getSignals.bind(apiService),
+    createSignal: apiService.createSignal.bind(apiService),
+    
+    // Strategies  
+    getStrategies: apiService.getStrategies.bind(apiService),
+    updateStrategy: apiService.updateStrategy.bind(apiService),
+    runStrategy: apiService.runStrategy.bind(apiService),
+    createStrategy: apiService.createStrategy.bind(apiService),
+    
+    // System
+    getSystemHealth: apiService.getSystemHealth.bind(apiService),
+    getTokenUsage: apiService.getTokenUsage.bind(apiService),
+    resetTokenUsage: apiService.resetTokenUsage.bind(apiService),
+    healthCheck: apiService.healthCheck.bind(apiService),
+
+    // Admin Management
+    getAdmins: apiService.getAdmins.bind(apiService),
+    getUsers: apiService.getUsers.bind(apiService),
+    createAdmin: apiService.createAdmin.bind(apiService),
+    updateAdmin: apiService.updateAdmin.bind(apiService),
+    deleteAdmin: apiService.deleteAdmin.bind(apiService),
+    validateTelegramId: apiService.validateTelegramId.bind(apiService)
   };
 } 

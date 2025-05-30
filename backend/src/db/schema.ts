@@ -10,6 +10,8 @@ export const migrations = sqliteTable('_migrations', {
 export const users = sqliteTable('users', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   email: text('email').notNull().unique(),
+  name: text('name'),
+  telegramId: text('telegram_id').unique(),
   isAdmin: integer('is_admin', { mode: 'boolean' }).default(false).notNull(),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`)
 });
