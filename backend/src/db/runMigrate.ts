@@ -4,9 +4,7 @@ import path from 'path';
 import Database from 'better-sqlite3';
 
 const DB_FILE = process.env.DB_FILE || path.resolve(process.cwd(), 'database.sqlite');
-const MIGRATIONS_DIR = fs.existsSync(path.resolve(process.cwd(), 'migrations/sqlite'))
-  ? path.resolve(process.cwd(), 'migrations/sqlite')
-  : path.resolve(process.cwd(), '../migrations/sqlite');
+const MIGRATIONS_DIR = path.resolve(process.cwd(), 'src/db/migrations');
 
 const db = new Database(DB_FILE);
 

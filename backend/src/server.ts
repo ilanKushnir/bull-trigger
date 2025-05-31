@@ -502,6 +502,96 @@ export const buildServer = async () => {
     return { ok: true };
   });
 
+  // ===== CONDITION NODES MANAGEMENT =====
+
+  // Get condition nodes for a strategy
+  fastify.get<{ Params: { id: string } }>('/api/strategies/:id/condition-nodes', async (req) => {
+    const strategyId = Number(req.params.id);
+    return strategyFlowService.getConditionNodesByStrategy(strategyId);
+  });
+
+  // Create new condition node
+  fastify.post<{ Params: { id: string }; Body: any }>('/api/strategies/:id/condition-nodes', async (req) => {
+    const strategyId = Number(req.params.id);
+    const conditionNodeData = { ...req.body, strategyId };
+    const id = strategyFlowService.createConditionNode(conditionNodeData);
+    return { id };
+  });
+
+  // Update condition node
+  fastify.put<{ Params: { id: string; conditionNodeId: string }; Body: any }>('/api/strategies/:id/condition-nodes/:conditionNodeId', async (req) => {
+    const conditionNodeId = Number(req.params.conditionNodeId);
+    strategyFlowService.updateConditionNode(conditionNodeId, req.body);
+    return { ok: true };
+  });
+
+  // Delete condition node
+  fastify.delete<{ Params: { id: string; conditionNodeId: string } }>('/api/strategies/:id/condition-nodes/:conditionNodeId', async (req) => {
+    const conditionNodeId = Number(req.params.conditionNodeId);
+    strategyFlowService.deleteConditionNode(conditionNodeId);
+    return { ok: true };
+  });
+
+  // ===== STRATEGY TRIGGER NODES MANAGEMENT =====
+
+  // Get strategy trigger nodes for a strategy
+  fastify.get<{ Params: { id: string } }>('/api/strategies/:id/strategy-trigger-nodes', async (req) => {
+    const strategyId = Number(req.params.id);
+    return strategyFlowService.getStrategyTriggerNodesByStrategy(strategyId);
+  });
+
+  // Create new strategy trigger node
+  fastify.post<{ Params: { id: string }; Body: any }>('/api/strategies/:id/strategy-trigger-nodes', async (req) => {
+    const strategyId = Number(req.params.id);
+    const triggerNodeData = { ...req.body, strategyId };
+    const id = strategyFlowService.createStrategyTriggerNode(triggerNodeData);
+    return { id };
+  });
+
+  // Update strategy trigger node
+  fastify.put<{ Params: { id: string; triggerNodeId: string }; Body: any }>('/api/strategies/:id/strategy-trigger-nodes/:triggerNodeId', async (req) => {
+    const triggerNodeId = Number(req.params.triggerNodeId);
+    strategyFlowService.updateStrategyTriggerNode(triggerNodeId, req.body);
+    return { ok: true };
+  });
+
+  // Delete strategy trigger node
+  fastify.delete<{ Params: { id: string; triggerNodeId: string } }>('/api/strategies/:id/strategy-trigger-nodes/:triggerNodeId', async (req) => {
+    const triggerNodeId = Number(req.params.triggerNodeId);
+    strategyFlowService.deleteStrategyTriggerNode(triggerNodeId);
+    return { ok: true };
+  });
+
+  // ===== TELEGRAM MESSAGE NODES MANAGEMENT =====
+
+  // Get telegram message nodes for a strategy
+  fastify.get<{ Params: { id: string } }>('/api/strategies/:id/telegram-message-nodes', async (req) => {
+    const strategyId = Number(req.params.id);
+    return strategyFlowService.getTelegramMessageNodesByStrategy(strategyId);
+  });
+
+  // Create new telegram message node
+  fastify.post<{ Params: { id: string }; Body: any }>('/api/strategies/:id/telegram-message-nodes', async (req) => {
+    const strategyId = Number(req.params.id);
+    const telegramNodeData = { ...req.body, strategyId };
+    const id = strategyFlowService.createTelegramMessageNode(telegramNodeData);
+    return { id };
+  });
+
+  // Update telegram message node
+  fastify.put<{ Params: { id: string; telegramNodeId: string }; Body: any }>('/api/strategies/:id/telegram-message-nodes/:telegramNodeId', async (req) => {
+    const telegramNodeId = Number(req.params.telegramNodeId);
+    strategyFlowService.updateTelegramMessageNode(telegramNodeId, req.body);
+    return { ok: true };
+  });
+
+  // Delete telegram message node
+  fastify.delete<{ Params: { id: string; telegramNodeId: string } }>('/api/strategies/:id/telegram-message-nodes/:telegramNodeId', async (req) => {
+    const telegramNodeId = Number(req.params.telegramNodeId);
+    strategyFlowService.deleteTelegramMessageNode(telegramNodeId);
+    return { ok: true };
+  });
+
   return fastify;
 };
 

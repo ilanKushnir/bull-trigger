@@ -292,6 +292,86 @@ class ApiService {
     console.log('🔍 Telegram ID validation result:', result);
     return result;
   }
+
+  // ===== CONDITION NODES =====
+
+  async getConditionNodes(strategyId: number): Promise<ApiResponse<any[]>> {
+    return this.request<any[]>(`/api/strategies/${strategyId}/condition-nodes`);
+  }
+
+  async createConditionNode(strategyId: number, conditionNode: any): Promise<ApiResponse<{ id: number }>> {
+    return this.request<{ id: number }>(`/api/strategies/${strategyId}/condition-nodes`, {
+      method: 'POST',
+      body: JSON.stringify(conditionNode),
+    });
+  }
+
+  async updateConditionNode(strategyId: number, conditionNodeId: number, conditionNode: any): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>(`/api/strategies/${strategyId}/condition-nodes/${conditionNodeId}`, {
+      method: 'PUT',
+      body: JSON.stringify(conditionNode),
+    });
+  }
+
+  async deleteConditionNode(strategyId: number, conditionNodeId: number): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>(`/api/strategies/${strategyId}/condition-nodes/${conditionNodeId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ===== STRATEGY TRIGGER NODES =====
+
+  async getStrategyTriggerNodes(strategyId: number): Promise<ApiResponse<any[]>> {
+    return this.request<any[]>(`/api/strategies/${strategyId}/strategy-trigger-nodes`);
+  }
+
+  async createStrategyTriggerNode(strategyId: number, triggerNode: any): Promise<ApiResponse<{ id: number }>> {
+    return this.request<{ id: number }>(`/api/strategies/${strategyId}/strategy-trigger-nodes`, {
+      method: 'POST',
+      body: JSON.stringify(triggerNode),
+    });
+  }
+
+  async updateStrategyTriggerNode(strategyId: number, triggerNodeId: number, triggerNode: any): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>(`/api/strategies/${strategyId}/strategy-trigger-nodes/${triggerNodeId}`, {
+      method: 'PUT',
+      body: JSON.stringify(triggerNode),
+    });
+  }
+
+  async deleteStrategyTriggerNode(strategyId: number, triggerNodeId: number): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>(`/api/strategies/${strategyId}/strategy-trigger-nodes/${triggerNodeId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ===== TELEGRAM MESSAGE NODES =====
+
+  async getTelegramMessageNodes(strategyId: number): Promise<ApiResponse<any[]>> {
+    return this.request<any[]>(`/api/strategies/${strategyId}/telegram-message-nodes`);
+  }
+
+  async createTelegramMessageNode(strategyId: number, telegramNode: any): Promise<ApiResponse<{ id: number }>> {
+    return this.request<{ id: number }>(`/api/strategies/${strategyId}/telegram-message-nodes`, {
+      method: 'POST',
+      body: JSON.stringify(telegramNode),
+    });
+  }
+
+  async updateTelegramMessageNode(strategyId: number, telegramNodeId: number, telegramNode: any): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>(`/api/strategies/${strategyId}/telegram-message-nodes/${telegramNodeId}`, {
+      method: 'PUT',
+      body: JSON.stringify(telegramNode),
+    });
+  }
+
+  async deleteTelegramMessageNode(strategyId: number, telegramNodeId: number): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>(`/api/strategies/${strategyId}/telegram-message-nodes/${telegramNodeId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ===== STRATEGY EXECUTION =====
 }
 
 // === WEBSOCKET CLIENT CLASS ===
@@ -545,6 +625,20 @@ export function useApi() {
     createAdmin: apiService.createAdmin.bind(apiService),
     updateAdmin: apiService.updateAdmin.bind(apiService),
     deleteAdmin: apiService.deleteAdmin.bind(apiService),
-    validateTelegramId: apiService.validateTelegramId.bind(apiService)
+    validateTelegramId: apiService.validateTelegramId.bind(apiService),
+
+    // Model Calls
+    getConditionNodes: apiService.getConditionNodes.bind(apiService),
+    createConditionNode: apiService.createConditionNode.bind(apiService),
+    updateConditionNode: apiService.updateConditionNode.bind(apiService),
+    deleteConditionNode: apiService.deleteConditionNode.bind(apiService),
+    getStrategyTriggerNodes: apiService.getStrategyTriggerNodes.bind(apiService),
+    createStrategyTriggerNode: apiService.createStrategyTriggerNode.bind(apiService),
+    updateStrategyTriggerNode: apiService.updateStrategyTriggerNode.bind(apiService),
+    deleteStrategyTriggerNode: apiService.deleteStrategyTriggerNode.bind(apiService),
+    getTelegramMessageNodes: apiService.getTelegramMessageNodes.bind(apiService),
+    createTelegramMessageNode: apiService.createTelegramMessageNode.bind(apiService),
+    updateTelegramMessageNode: apiService.updateTelegramMessageNode.bind(apiService),
+    deleteTelegramMessageNode: apiService.deleteTelegramMessageNode.bind(apiService)
   };
 } 

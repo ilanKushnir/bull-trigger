@@ -105,3 +105,53 @@ export const flowExecutionLogs = sqliteTable('flow_execution_logs', {
   duration: integer('duration'), // execution time in milliseconds
   timestamp: text('timestamp').default(sql`CURRENT_TIMESTAMP`).notNull()
 });
+
+export const conditionNodes = sqliteTable('condition_nodes', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  strategyId: integer('strategy_id').notNull(),
+  name: text('name').notNull(),
+  conditionType: text('condition_type').notNull(), // 'api_result', 'model_response', 'variable_value'
+  leftOperand: text('left_operand').notNull(), // Variable name or JSONPath
+  operator: text('operator').notNull(), // '==', '!=', '>', '<', '>=', '<=', 'contains', 'startsWith', 'endsWith'
+  rightOperand: text('right_operand').notNull(), // Value to compare against
+  trueOutputVariable: text('true_output_variable'), // Variable to set if condition is true
+  falseOutputVariable: text('false_output_variable'), // Variable to set if condition is false
+  orderIndex: integer('order_index').notNull(),
+  enabled: integer('enabled', { mode: 'boolean' }).default(true).notNull()
+});
+
+export const strategyTriggerNodes = sqliteTable('strategy_trigger_nodes', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  strategyId: integer('strategy_id').notNull(),
+  name: text('name').notNull(),
+  targetStrategyId: integer('target_strategy_id').notNull(),
+  conditionVariable: text('condition_variable'), // Optional: only trigger if this variable is truthy
+  passVariables: text('pass_variables'), // JSON array of variable names to pass to target strategy
+  waitForCompletion: integer('wait_for_completion', { mode: 'boolean' }).default(false).notNull(),
+  outputVariable: text('output_variable'), // Variable to store result if waiting for completion
+  orderIndex: integer('order_index').notNull(),
+  enabled: integer('enabled', { mode: 'boolean' }).default(true).notNull()
+});
+
+export const telegramMessageNodes = sqliteTable('telegram_message_nodes', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  strategyId: integer('strategy_id').notNull(),
+  name: text('name').notNull(),
+  chatId: text('chat_id').notNull(), // Telegram chat ID or channel username
+  messageTemplate: text('message_template').notNull(), // Message template with variable interpolation
+  includeApiData: integer('include_api_data', { mode: 'boolean' }).default(false).notNull(),
+  onlyIfVariable: text('only_if_variable'), // Optional: only send if this variable is truthy
+  messageType: text('message_type').default('info').notNull(), // 'info', 'success', 'warning', 'error'
+  parseMode: text('parse_mode').default('Markdown').notNull(), // 'Markdown', 'HTML', or 'none'
+  orderIndex: integer('order_index').notNull(),
+  enabled: integer('enabled', { mode: 'boolean' }).default(true).notNull()
+});
+
+export const signals = sqliteTable('signals', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull().unique(),
+  description: text('description'),
+  enabled: integer('enabled', { mode: 'boolean' }).default(true).notNull(),
+  cron: text('cron').default('*/5 * * * *'),
+  triggers: text('triggers')
+});
