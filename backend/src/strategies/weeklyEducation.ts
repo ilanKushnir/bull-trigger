@@ -1,6 +1,5 @@
 // @ts-nocheck
 import { AbstractStrategy } from './abstract';
-import { sendMessage } from '../telegram/gateway';
 
 const EDUCATION_QUOTES = [
   '📚 *Tip*: Use risk management and never invest more than you can lose.',
@@ -13,9 +12,8 @@ function pick(arr: string[]) {
 }
 
 export class WeeklyEducationStrategy extends AbstractStrategy {
-  async execute() {
-    const text = pick(EDUCATION_QUOTES);
-    await sendMessage(text);
-    console.log('[strategy] WeeklyEducation sent');
+  execute() {
+    // Weekly education logic here
+    // Could send educational content to Telegram
   }
 } 

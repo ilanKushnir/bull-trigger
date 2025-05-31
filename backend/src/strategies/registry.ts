@@ -1,10 +1,10 @@
 // @ts-nocheck
-import cron from 'node-cron';
 import Database from 'better-sqlite3';
+import cron from 'node-cron';
 import path from 'path';
 import { AbstractStrategy, StrategyContext } from './abstract';
-import { WeeklyEducationStrategy } from './weeklyEducation';
 import { TokenWatcherStrategy } from './tokenWatcher';
+import { WeeklyEducationStrategy } from './weeklyEducation';
 
 // Use the same database path logic as server.ts
 const cwd = process.cwd();
@@ -53,11 +53,18 @@ export function refreshRegistry() {
 
 export function runStrategyOnce(id: number) {
   const row = sqlite.prepare('SELECT * FROM strategies WHERE id = ?').get(id);
-  if (!row) throw new Error('Not found');
-  const ctx: StrategyContext = { id: row.id, name: row.name, triggers: row.triggers ? JSON.parse(row.triggers) : undefined };
+  if (!row) throw new Error('Strategy not found');
+  
+  const ctx: StrategyContext = { 
+    id: row.id, 
+    name: row.name, 
+    triggers: row.triggers ? JSON.parse(row.triggers) : undefined 
+  };
+  
   const impl = new (class extends AbstractStrategy {
-    execute() { console.log(`[strategy] manual run ${this.ctx.name}`); }
+    execute() { /* Manual strategy execution */ }
   })(ctx);
+  
   impl.execute();
 }
 

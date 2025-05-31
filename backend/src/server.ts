@@ -1,22 +1,18 @@
 // @ts-nocheck
-import Fastify from 'fastify';
+import cors from '@fastify/cors';
 import envPlugin from '@fastify/env';
+import sensible from '@fastify/sensible';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
-import helmet from '@fastify/helmet';
-import sensible from '@fastify/sensible';
-import cors from '@fastify/cors';
-import { fileURLToPath, pathToFileURL } from 'url';
-import path from 'path';
 import Database from 'better-sqlite3';
-import { refreshRegistry, runStrategyOnce, ensureDefaultStrategies } from './strategies/registry';
-import { strategyFlowRepo } from './repo/strategyFlowRepo';
-import fs from 'fs';
-import { exportGraphDot } from './utils/graphUtils';
-import { initializeWebSocketService, websocketService } from './websocket/websocketService';
+import Fastify from 'fastify';
+import path from 'path';
+import { pathToFileURL } from 'url';
 import { strategyExecutionService } from './services/strategyExecutionService';
 import { strategyFlowService } from './services/strategyFlowService';
+import { refreshRegistry } from './strategies/registry';
 import { resetTokenUsage } from './utils/settings';
+import { initializeWebSocketService } from './websocket/websocketService';
 
 type FastifyType = import('fastify').FastifyInstance;
 
@@ -29,21 +25,28 @@ const envSchema = {
   }
 };
 
-// Determine the correct database path
+// Database setup with the same path logic
 const cwd = process.cwd();
 const isInBackendDir = cwd.endsWith('/backend');
 const DB_FILE_PATH = process.env.DB_FILE || (isInBackendDir 
   ? path.resolve(cwd, 'database.sqlite')
   : path.resolve(cwd, 'backend/database.sqlite'));
-console.log('🔍 Database file path:', DB_FILE_PATH);
-console.log('🔍 Current working directory:', process.cwd());
-const sqliteDb = new Database(DB_FILE_PATH);
 
-// Note: ensureTokenSettings() will be called in start() function after database is ready
+const sqliteDb = new Database(DB_FILE_PATH);
 
 export const buildServer = async () => {
   const fastify = Fastify({ 
-    logger: true
+    logger: {
+      level: 'warn', // Reduce log verbosity
+      transport: {
+        target: 'pino-pretty',
+        options: {
+          translateTime: 'HH:MM:ss',
+          ignore: 'pid,hostname',
+          colorize: true
+        }
+      }
+    }
   });
 
   await fastify.register(envPlugin, { schema: envSchema, dotenv: true, data: process.env });
@@ -56,8 +59,6 @@ export const buildServer = async () => {
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
   });
-
-  console.log('✅ CORS plugin registered');
 
   // Manual CORS hook as fallback
   fastify.addHook('onRequest', async (request, reply) => {
@@ -76,9 +77,6 @@ export const buildServer = async () => {
     }
   });
 
-  // await fastify.register(helmet, {
-  //   crossOriginResourcePolicy: false
-  // });
   await fastify.register(sensible);
 
   await fastify.register(swagger, {
@@ -97,15 +95,15 @@ export const buildServer = async () => {
     status: 'ok',
     websocket: {
       enabled: true,
-      activeConnections: websocketService?.getActiveConnections() || 0
+      activeConnections: 0 // Will be updated when WebSocket service is available
     }
   }));
 
   // WebSocket status endpoint
   fastify.get('/api/websocket/status', async () => {
     return {
-      enabled: !!websocketService,
-      activeConnections: websocketService?.getActiveConnections() || 0
+      enabled: true,
+      activeConnections: 0 // Will be updated when WebSocket service is available
     };
   });
 
@@ -138,13 +136,6 @@ export const buildServer = async () => {
     });
     refreshRegistry();
     
-    // Broadcast strategy update via WebSocket
-    websocketService?.broadcastStrategyUpdate(id, {
-      enabled: body.enabled,
-      cron: body.cron,
-      triggers: body.triggers
-    });
-    
     return { ok: true };
   });
 
@@ -162,13 +153,6 @@ export const buildServer = async () => {
         // Mark execution as successful
         strategyExecutionService.completeExecution(executionId);
         
-        // Broadcast strategy execution via WebSocket
-        websocketService?.broadcastAlert({
-          type: 'info',
-          message: `Strategy ${strategyId} executed successfully`,
-          timestamp: new Date()
-        });
-        
         return { 
           ok: true, 
           executionId,
@@ -178,12 +162,6 @@ export const buildServer = async () => {
       } else {
         // Mark execution as failed
         strategyExecutionService.failExecution(executionId, flowResult.error);
-        
-        websocketService?.broadcastAlert({
-          type: 'error',
-          message: `Strategy ${strategyId} execution failed: ${flowResult.error}`,
-          timestamp: new Date()
-        });
         
         return { 
           ok: false, 
@@ -196,6 +174,126 @@ export const buildServer = async () => {
       strategyExecutionService.failExecution(executionId, error?.message || 'Unknown error');
       throw error;
     }
+  });
+
+  // Settings management endpoints
+  fastify.get('/api/settings', async () => {
+    try {
+      const settings = sqliteDb.prepare('SELECT key, value FROM settings ORDER BY key').all() as { key: string; value: string }[];
+      
+      const settingsObj: Record<string, any> = {};
+      settings.forEach(({ key, value }) => {
+        try {
+          settingsObj[key] = JSON.parse(value);
+        } catch {
+          settingsObj[key] = value;
+        }
+      });
+      
+      return settingsObj;
+    } catch (error) {
+      console.error('Failed to fetch settings:', error);
+      return { error: 'Failed to fetch settings' };
+    }
+  });
+
+  fastify.put('/api/settings', async (req) => {
+    const settings = req.body as Record<string, any>;
+    
+    try {
+      const updateStmt = sqliteDb.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+      const transaction = sqliteDb.transaction((settingsToUpdate: Array<[string, any]>) => {
+        for (const [key, value] of settingsToUpdate) {
+          const serializedValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
+          updateStmt.run(key, serializedValue);
+        }
+      });
+      
+      transaction(Object.entries(settings));
+      return { ok: true };
+    } catch (error) {
+      console.error('Failed to update settings:', error);
+      return { error: 'Failed to update settings' };
+    }
+  });
+
+  fastify.put('/api/settings/tokenReset', async () => {
+    try {
+      resetTokenUsage();
+      return { ok: true };
+    } catch (error) {
+      console.error('Failed to reset token usage:', error);
+      return { error: 'Failed to reset token usage' };
+    }
+  });
+
+  // Strategy flow endpoints
+  fastify.post('/api/strategies', async (req) => {
+    const { name, description } = req.body as any;
+    const res: any = sqliteDb
+      .prepare('INSERT INTO strategies (name, description, enabled, cron) VALUES (?, ?, 1, ?)')
+      .run(name, description ?? null, '*/5 * * * *');
+    return { id: res.lastInsertRowid };
+  });
+
+  fastify.get<{ Params: { id: string } }>('/api/strategies/:id/flow', async (req) => {
+    const strategyId = Number(req.params.id);
+    return strategyFlowService.getStrategyFlow(strategyId);
+  });
+
+  // API calls management
+  fastify.get<{ Params: { id: string } }>('/api/strategies/:id/api-calls', async (req) => {
+    const strategyId = Number(req.params.id);
+    return strategyFlowService.getApiCallsByStrategy(strategyId);
+  });
+
+  fastify.post<{ Params: { id: string }; Body: any }>('/api/strategies/:id/api-calls', async (req) => {
+    const strategyId = Number(req.params.id);
+    const apiCallData = { ...req.body, strategyId };
+    const id = await strategyFlowService.createApiCall(strategyId, apiCallData);
+    return { id };
+  });
+
+  fastify.put<{ Params: { id: string; apiCallId: string }; Body: any }>('/api/strategies/:id/api-calls/:apiCallId', async (req) => {
+    const apiCallId = Number(req.params.apiCallId);
+    await strategyFlowService.updateApiCall(apiCallId, req.body);
+    return { ok: true };
+  });
+
+  fastify.delete<{ Params: { id: string; apiCallId: string } }>('/api/strategies/:id/api-calls/:apiCallId', async (req) => {
+    const apiCallId = Number(req.params.apiCallId);
+    strategyFlowService.deleteApiCall(apiCallId);
+    return { ok: true };
+  });
+
+  fastify.post('/api/test-api-call', async (req) => {
+    const result = await strategyFlowService.testApiCall(req.body as any);
+    return result;
+  });
+
+  // Model calls management
+  fastify.get<{ Params: { id: string } }>('/api/strategies/:id/model-calls', async (req) => {
+    const strategyId = Number(req.params.id);
+    return strategyFlowService.getModelCallsByStrategy(strategyId);
+  });
+
+  fastify.post<{ Params: { id: string }; Body: any }>('/api/strategies/:id/model-calls', async (req) => {
+    const strategyId = Number(req.params.id);
+    const modelCallData = { ...req.body, strategyId };
+    const id = await strategyFlowService.createModelCall(strategyId, modelCallData);
+    return { id };
+  });
+
+  fastify.put<{ Params: { id: string; modelCallId: string }; Body: any }>('/api/strategies/:id/model-calls/:modelCallId', async (req) => {
+    const modelCallId = Number(req.params.modelCallId);
+    await strategyFlowService.updateModelCall(modelCallId, req.body);
+    return { ok: true };
+  });
+
+  fastify.delete<{ Params: { id: string; modelCallId: string } }>('/api/strategies/:id/model-calls/:modelCallId', async (req) => {
+    const modelCallId = Number(req.params.modelCallId);
+    strategyFlowService.deleteModelCall(modelCallId);
+    return { ok: true };
   });
 
   // New endpoint to get detailed metrics for all strategies
@@ -220,264 +318,6 @@ export const buildServer = async () => {
   fastify.post('/api/strategies/seed-data', async () => {
     strategyExecutionService.seedSampleData();
     return { ok: true, message: 'Sample execution data seeded' };
-  });
-
-  fastify.put('/api/settings/tokenReset', async () => {
-    try {
-      resetTokenUsage();
-      
-      // Broadcast token reset via WebSocket
-      websocketService?.broadcastTokenUpdate();
-      websocketService?.broadcastAlert({
-        type: 'info',
-        message: 'Token usage counter reset',
-        timestamp: new Date()
-      });
-      
-      return { ok: true };
-    } catch (error) {
-      console.error('Failed to reset token usage:', error);
-      return { error: 'Failed to reset token usage' };
-    }
-  });
-
-  // ===== SETTINGS MANAGEMENT ENDPOINTS =====
-  
-  // Get all settings
-  fastify.get('/api/settings', async () => {
-    try {
-      const settings = sqliteDb.prepare('SELECT key, value FROM settings ORDER BY key').all() as { key: string; value: string }[];
-      
-      // Convert to object format for easier frontend consumption
-      const settingsObj: Record<string, any> = {};
-      settings.forEach(({ key, value }) => {
-        // Try to parse JSON values, otherwise keep as string
-        try {
-          settingsObj[key] = JSON.parse(value);
-        } catch {
-          settingsObj[key] = value;
-        }
-      });
-      
-      return settingsObj;
-    } catch (error) {
-      console.error('Failed to fetch settings:', error);
-      return { error: 'Failed to fetch settings' };
-    }
-  });
-
-  // Get a specific setting
-  fastify.get<{ Params: { key: string } }>('/api/settings/:key', async (req) => {
-    const { key } = req.params;
-    
-    try {
-      const setting = sqliteDb.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
-      
-      if (!setting) {
-        return { error: 'Setting not found' };
-      }
-      
-      // Try to parse JSON value, otherwise return as string
-      try {
-        return { value: JSON.parse(setting.value) };
-      } catch {
-        return { value: setting.value };
-      }
-    } catch (error) {
-      console.error('Failed to fetch setting:', error);
-      return { error: 'Failed to fetch setting' };
-    }
-  });
-
-  // Update multiple settings
-  fastify.put('/api/settings', async (req) => {
-    const settings = req.body as Record<string, any>;
-    
-    try {
-      const updateStmt = sqliteDb.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
-      const transaction = sqliteDb.transaction((settingsToUpdate: Array<[string, any]>) => {
-        for (const [key, value] of settingsToUpdate) {
-          const serializedValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
-          updateStmt.run(key, serializedValue);
-        }
-      });
-      
-      transaction(Object.entries(settings));
-      
-      // Broadcast settings update via WebSocket
-      websocketService?.broadcastAlert({
-        type: 'info',
-        message: `Updated ${Object.keys(settings).length} system settings`,
-        timestamp: new Date()
-      });
-      
-      // If token settings were updated, broadcast token update
-      if (settings.TOKEN_LIMIT || settings.TOKEN_WARN || settings.TOKEN_PANIC) {
-        websocketService?.broadcastTokenUpdate();
-      }
-      
-      return { ok: true };
-    } catch (error) {
-      console.error('Failed to update settings:', error);
-      return { error: 'Failed to update settings' };
-    }
-  });
-
-  // Update a specific setting
-  fastify.put<{ Params: { key: string }; Body: { value: any } }>('/api/settings/:key', async (req) => {
-    const { key } = req.params;
-    const { value } = req.body;
-    
-    try {
-      const serializedValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
-      sqliteDb.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, serializedValue);
-      
-      // Broadcast setting update via WebSocket
-      websocketService?.broadcastAlert({
-        type: 'info',
-        message: `Updated setting: ${key}`,
-        timestamp: new Date()
-      });
-      
-      // If token setting was updated, broadcast token update
-      if (key.startsWith('TOKEN_')) {
-        websocketService?.broadcastTokenUpdate();
-      }
-      
-      return { ok: true };
-    } catch (error) {
-      console.error('Failed to update setting:', error);
-      return { error: 'Failed to update setting' };
-    }
-  });
-
-  // Delete a setting
-  fastify.delete<{ Params: { key: string } }>('/api/settings/:key', async (req) => {
-    const { key } = req.params;
-    
-    try {
-      sqliteDb.prepare('DELETE FROM settings WHERE key = ?').run(key);
-      
-      // Broadcast setting deletion via WebSocket
-      websocketService?.broadcastAlert({
-        type: 'warning',
-        message: `Deleted setting: ${key}`,
-        timestamp: new Date()
-      });
-      
-      return { ok: true };
-    } catch (error) {
-      console.error('Failed to delete setting:', error);
-      return { error: 'Failed to delete setting' };
-    }
-  });
-
-  // Reset all settings to defaults
-  fastify.post('/api/settings/reset', async () => {
-    try {
-      // Clear all existing settings
-      sqliteDb.prepare('DELETE FROM settings').run();
-      
-      // Re-initialize with defaults
-      ensureTokenSettings();
-      
-      // Add other default settings
-      const defaultSettings = [
-        ['MODEL_DEEP', 'o1'],
-        ['MODEL_CHEAP', 'gpt-4o-mini'],
-        ['TELEGRAM_CHAT_ID', '-1001234567890'],
-        ['SIGNAL_COOLDOWN', '30'],
-        ['HEARTBEAT_INTERVAL', '120'],
-        ['ENABLE_NOTIFICATIONS', 'true'],
-        ['AUTO_DISABLE_FAILING_STRATEGIES', 'false']
-      ];
-      
-      const insertStmt = sqliteDb.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
-      const transaction = sqliteDb.transaction((settings: Array<[string, string]>) => {
-        for (const [key, value] of settings) {
-          insertStmt.run(key, value);
-        }
-      });
-      
-      transaction(defaultSettings);
-      
-      // Broadcast settings reset via WebSocket
-      websocketService?.broadcastAlert({
-        type: 'warning',
-        message: 'All settings reset to defaults',
-        timestamp: new Date()
-      });
-      
-      websocketService?.broadcastTokenUpdate();
-      
-      return { ok: true };
-    } catch (error) {
-      console.error('Failed to reset settings:', error);
-      return { error: 'Failed to reset settings' };
-    }
-  });
-
-  // Live signals endpoint with WebSocket broadcasting
-  fastify.post('/api/signals', async (req) => {
-    const { symbol, signal, confidence, price, strategy } = req.body as any;
-    
-    // Store signal in database
-    const result: any = sqliteDb.prepare(`
-      INSERT INTO signals (symbol, signal, confidence, price, strategy, created_at) 
-      VALUES (?, ?, ?, ?, ?, datetime('now'))
-    `).run(symbol, signal, confidence, price, strategy);
-    
-    // Broadcast new signal via WebSocket
-    websocketService?.broadcastSignal({
-      id: result.lastInsertRowid.toString(),
-      symbol,
-      signal,
-      confidence,
-      price,
-      strategy,
-      timestamp: new Date()
-    });
-    
-    return { id: result.lastInsertRowid };
-  });
-
-  // Get recent signals
-  fastify.get('/api/signals', async () => {
-    try {
-      const signals = sqliteDb.prepare(`
-        SELECT * FROM signals 
-        ORDER BY created_at DESC 
-        LIMIT 50
-      `).all();
-      return signals;
-    } catch (error) {
-      return [];
-    }
-  });
-
-  // System health endpoint
-  fastify.get('/api/system/health', async () => {
-    const memoryUsage = process.memoryUsage();
-    const uptime = process.uptime();
-    
-    return {
-      status: 'healthy',
-      uptime,
-      memoryUsage,
-      websocketConnections: websocketService?.getActiveConnections() || 0
-    };
-  });
-
-  // Token usage endpoint
-  fastify.get('/api/tokens/usage', async () => {
-    const tokenLimit = Number((sqliteDb.prepare('SELECT value FROM settings WHERE key = "TOKEN_LIMIT"').get() as { value: string } | undefined)?.value || 100000);
-    const tokenUsed = Number((sqliteDb.prepare('SELECT value FROM settings WHERE key = "TOKEN_USED"').get() as { value: string } | undefined)?.value || 0);
-    
-    return {
-      used: tokenUsed,
-      limit: tokenLimit,
-      percentage: tokenUsed / tokenLimit
-    };
   });
 
   // ===== ADMIN MANAGEMENT ENDPOINTS =====
@@ -601,89 +441,6 @@ export const buildServer = async () => {
 
   // ===== END ADMIN MANAGEMENT =====
 
-  // ===== STRATEGY FLOW API ENDPOINTS =====
-
-  // Create new strategy
-  fastify.post('/api/strategies', async (req) => {
-    const { name, description } = req.body as any;
-    const res: any = sqliteDb
-      .prepare('INSERT INTO strategies (name, description, enabled, cron) VALUES (?, ?, 1, ?)')
-      .run(name, description ?? null, '*/5 * * * *');
-    return { id: res.lastInsertRowid };
-  });
-
-  // Get strategy flow (API calls and model calls)
-  fastify.get<{ Params: { id: string } }>('/api/strategies/:id/flow', async (req) => {
-    const strategyId = Number(req.params.id);
-    return strategyFlowService.getStrategyFlow(strategyId);
-  });
-
-  // ===== API CALLS MANAGEMENT =====
-
-  // Get API calls for a strategy
-  fastify.get<{ Params: { id: string } }>('/api/strategies/:id/api-calls', async (req) => {
-    const strategyId = Number(req.params.id);
-    return strategyFlowService.getApiCallsByStrategy(strategyId);
-  });
-
-  // Create new API call
-  fastify.post<{ Params: { id: string }; Body: any }>('/api/strategies/:id/api-calls', async (req) => {
-    const strategyId = Number(req.params.id);
-    const apiCallData = { ...req.body, strategyId };
-    const id = strategyFlowService.createApiCall(apiCallData);
-    return { id };
-  });
-
-  // Update API call
-  fastify.put<{ Params: { id: string; apiCallId: string }; Body: any }>('/api/strategies/:id/api-calls/:apiCallId', async (req) => {
-    const apiCallId = Number(req.params.apiCallId);
-    strategyFlowService.updateApiCall(apiCallId, req.body);
-    return { ok: true };
-  });
-
-  // Delete API call
-  fastify.delete<{ Params: { id: string; apiCallId: string } }>('/api/strategies/:id/api-calls/:apiCallId', async (req) => {
-    const apiCallId = Number(req.params.apiCallId);
-    strategyFlowService.deleteApiCall(apiCallId);
-    return { ok: true };
-  });
-
-  // Test API call
-  fastify.post('/api/test-api-call', async (req) => {
-    const result = await strategyFlowService.testApiCall(req.body as any);
-    return result;
-  });
-
-  // ===== MODEL CALLS MANAGEMENT =====
-
-  // Get model calls for a strategy
-  fastify.get<{ Params: { id: string } }>('/api/strategies/:id/model-calls', async (req) => {
-    const strategyId = Number(req.params.id);
-    return strategyFlowService.getModelCallsByStrategy(strategyId);
-  });
-
-  // Create new model call
-  fastify.post<{ Params: { id: string }; Body: any }>('/api/strategies/:id/model-calls', async (req) => {
-    const strategyId = Number(req.params.id);
-    const modelCallData = { ...req.body, strategyId };
-    const id = strategyFlowService.createModelCall(modelCallData);
-    return { id };
-  });
-
-  // Update model call
-  fastify.put<{ Params: { id: string; modelCallId: string }; Body: any }>('/api/strategies/:id/model-calls/:modelCallId', async (req) => {
-    const modelCallId = Number(req.params.modelCallId);
-    strategyFlowService.updateModelCall(modelCallId, req.body);
-    return { ok: true };
-  });
-
-  // Delete model call
-  fastify.delete<{ Params: { id: string; modelCallId: string } }>('/api/strategies/:id/model-calls/:modelCallId', async (req) => {
-    const modelCallId = Number(req.params.modelCallId);
-    strategyFlowService.deleteModelCall(modelCallId);
-    return { ok: true };
-  });
-
   // ===== CONDITION NODES MANAGEMENT =====
 
   // Get condition nodes for a strategy
@@ -777,70 +534,93 @@ export const buildServer = async () => {
   return fastify;
 };
 
-function ensureTokenSettings() {
-  console.log('🔍 Initializing system settings...');
+async function initializeSystemSettings() {
+  const defaultSettings = {
+    TOKEN_LIMIT: '100000',
+    TOKEN_USED: '0',
+    TOKEN_WARN: '0.8',
+    TOKEN_PANIC: '0.95',
+    MODEL_DEEP: 'o1',
+    MODEL_CHEAP: 'gpt-4o-mini',
+    TELEGRAM_CHAT_ID: '-1001234567890',
+    SIGNAL_COOLDOWN: '30',
+    HEARTBEAT_INTERVAL: '120',
+    ENABLE_NOTIFICATIONS: 'true',
+    AUTO_DISABLE_FAILING_STRATEGIES: 'false',
+    app_name: 'Bull Trigger',
+    version: '1.0.0'
+  };
 
-  // Define all default settings
-  const defaultSettings = [
-    // Token management
-    ['TOKEN_LIMIT', '100000'],
-    ['TOKEN_USED', '0'],
-    ['TOKEN_WARN', '0.8'],
-    ['TOKEN_PANIC', '0.95'],
-    
-    // AI Models - Updated to latest 2024-2025 models
-    ['MODEL_DEEP', 'o1'],  // Advanced reasoning model for complex analysis
-    ['MODEL_CHEAP', 'gpt-4o-mini'],  // Latest efficient model for standard tasks
-    
-    // Telegram Integration
-    ['TELEGRAM_CHAT_ID', '-1001234567890'],
-    
-    // System Behavior
-    ['SIGNAL_COOLDOWN', '30'],
-    ['HEARTBEAT_INTERVAL', '120'],
-    ['ENABLE_NOTIFICATIONS', 'true'],
-    ['AUTO_DISABLE_FAILING_STRATEGIES', 'false'],
-    
-    // Application metadata
-    ['app_name', 'Bull Trigger'],
-    ['version', '1.0.0']
-  ];
-
-  // Insert all default settings (ignore conflicts for existing settings)
-  const insertStmt = sqliteDb.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
-  const transaction = sqliteDb.transaction((settings: Array<[string, string]>) => {
-    for (const [key, value] of settings) {
-      insertStmt.run(key, value);
-      console.log(`📝 Setting ${key} = ${value}`);
+  for (const [key, value] of Object.entries(defaultSettings)) {
+    const existing = sqliteDb.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+    if (!existing) {
+      sqliteDb.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(key, value);
     }
-  });
-
-  transaction(defaultSettings);
-  console.log('✅ System settings initialized');
+  }
 }
 
-export const start = async () => {
-  const server = await buildServer();
-  
-  // Start the Fastify server
-  await server.listen({ port: Number(process.env.PORT) || 3000, host: '0.0.0.0' });
-  
-  // Initialize database settings first, before any services that might need them
-  ensureTokenSettings();
-  ensureDefaultStrategies();
+function loadStrategies() {
   refreshRegistry();
+}
+
+async function startServer() {
+  const PORT = Number(process.env.PORT) || 3000;
   
-  // Initialize WebSocket service using the underlying HTTP server
-  const httpServer = server.server;
-  initializeWebSocketService(httpServer, sqliteDb);
-  
-  console.log('🚀 Server started with WebSocket support');
-  console.log('📡 WebSocket endpoint: ws://localhost:' + (Number(process.env.PORT) || 3000));
-};
+  try {
+    // Beautiful startup banner
+    console.log('\n🚀 ====================================');
+    console.log('   📈 BULL TRIGGER SERVER STARTING');
+    console.log('   ====================================\n');
+    
+    // Initialize system components
+    console.log('⚙️  Initializing system settings...');
+    await initializeSystemSettings();
+    
+    console.log('📋 Loading strategy registry...');
+    loadStrategies();
+    
+    console.log('🔧 Building server...');
+    const fastify = await buildServer();
+    
+    console.log('🌐 Starting HTTP server...');
+    await fastify.listen({ port: PORT, host: '0.0.0.0' });
+    
+    // Initialize WebSocket after server starts
+    console.log('⚡ Initializing WebSocket service...');
+    initializeWebSocketService(fastify.server, sqliteDb);
+    
+    // Beautiful success message
+    console.log('\n✅ ====================================');
+    console.log('   🎉 SERVER READY!');
+    console.log('   ====================================');
+    console.log(`🌐 HTTP Server: http://localhost:${PORT}`);
+    console.log(`📡 WebSocket: ws://localhost:${PORT}`);
+    console.log(`📚 API Docs: http://localhost:${PORT}/docs/api`);
+    console.log(`💾 Database: ${DB_FILE_PATH}`);
+    
+    // Network interfaces info
+    console.log('\n📡 Network Interfaces:');
+    console.log('   • localhost (127.0.0.1)');
+    console.log('   • All network interfaces (0.0.0.0)');
+    console.log('   • Local network access available');
+    
+    console.log('\n🎯 Ready to process crypto strategies!\n');
+    
+  } catch (err) {
+    console.log('\n❌ ====================================');
+    console.log('   💥 SERVER STARTUP FAILED');
+    console.log('   ====================================');
+    console.error('Error:', err);
+    console.log('====================================\n');
+    process.exit(1);
+  }
+}
+
+export const start = startServer;
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   // executed directly via tsx node
-  start().catch((err) => {
+  startServer().catch((err) => {
     console.error(err);
     process.exit(1);
   });

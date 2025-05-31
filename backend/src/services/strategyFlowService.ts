@@ -99,59 +99,54 @@ export class StrategyFlowService {
   
   // ===== API CALLS MANAGEMENT =====
   
-  createApiCall(apiCall: Omit<ApiCall, 'id'>): number {
-    const result: any = db.prepare(`
-      INSERT INTO api_calls 
-      (strategy_id, name, url, method, headers, body, json_path, output_variable, order_index, enabled)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      apiCall.strategyId,
-      apiCall.name,
-      apiCall.url,
-      apiCall.method,
-      apiCall.headers || null,
-      apiCall.body || null,
-      apiCall.jsonPath || null,
-      apiCall.outputVariable,
-      apiCall.orderIndex,
-      apiCall.enabled ? 1 : 0
-    );
+  async createApiCall(strategyId: number, apiCallData: any): Promise<number> {
+    const query = `
+      INSERT INTO api_calls (strategy_id, name, url, method, headers, json_path, order_index)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+    const values = [
+      strategyId,
+      apiCallData.name,
+      apiCallData.url,
+      apiCallData.method,
+      JSON.stringify(apiCallData.headers || {}),
+      apiCallData.jsonPath,
+      apiCallData.orderIndex || 0
+    ];
     
-    return result.lastInsertRowid;
+    try {
+      const result = db.prepare(query).run(...values);
+      return result.lastInsertRowid as number;
+    } catch (error) {
+      console.error('Failed to create API call:', error);
+      throw error;
+    }
   }
 
-  updateApiCall(id: number, updates: Partial<ApiCall>): void {
+  async updateApiCall(id: number, apiCallData: any): Promise<void> {
     const fields: string[] = [];
     const values: any[] = [];
     
-    // Define explicit field mappings
     const fieldMap: Record<string, string> = {
-      strategyId: 'strategy_id',
-      jsonPath: 'json_path',
-      outputVariable: 'output_variable',
-      orderIndex: 'order_index',
-      // Direct mappings (no transformation needed)
       name: 'name',
       url: 'url',
       method: 'method',
       headers: 'headers',
-      body: 'body',
-      enabled: 'enabled'
+      jsonPath: 'json_path',
+      orderIndex: 'order_index'
     };
     
-    Object.entries(updates).forEach(([key, value]) => {
+    Object.entries(apiCallData).forEach(([key, value]) => {
       if (key !== 'id') {
         const dbField = fieldMap[key] || key;
         fields.push(`${dbField} = ?`);
-        // Convert boolean to integer for SQLite
-        values.push(key === 'enabled' ? (value ? 1 : 0) : value);
+        values.push(value);
       }
     });
     
     if (fields.length > 0) {
       values.push(id);
       const query = `UPDATE api_calls SET ${fields.join(', ')} WHERE id = ?`;
-      console.log('🔧 Executing SQL:', query, 'with values:', values);
       db.prepare(query).run(...values);
     }
   }
@@ -187,57 +182,50 @@ export class StrategyFlowService {
 
   // ===== MODEL CALLS MANAGEMENT =====
   
-  createModelCall(modelCall: Omit<ModelCall, 'id'>): number {
-    const result: any = db.prepare(`
-      INSERT INTO model_calls 
-      (strategy_id, name, model_tier, system_prompt, user_prompt, include_api_data, output_variable, order_index, enabled)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      modelCall.strategyId,
-      modelCall.name,
-      modelCall.modelTier,
-      modelCall.systemPrompt || null,
-      modelCall.userPrompt,
-      modelCall.includeApiData ? 1 : 0,
-      modelCall.outputVariable,
-      modelCall.orderIndex,
-      modelCall.enabled ? 1 : 0
-    );
+  async createModelCall(strategyId: number, modelCallData: any): Promise<number> {
+    const query = `
+      INSERT INTO model_calls (strategy_id, name, prompt_template, model_tier, order_index)
+      VALUES (?, ?, ?, ?, ?)
+    `;
+    const values = [
+      strategyId,
+      modelCallData.name,
+      modelCallData.promptTemplate,
+      modelCallData.modelTier,
+      modelCallData.orderIndex || 0
+    ];
     
-    return result.lastInsertRowid;
+    try {
+      const result = db.prepare(query).run(...values);
+      return result.lastInsertRowid as number;
+    } catch (error) {
+      console.error('Failed to create model call:', error);
+      throw error;
+    }
   }
 
-  updateModelCall(id: number, updates: Partial<ModelCall>): void {
+  async updateModelCall(id: number, modelCallData: any): Promise<void> {
     const fields: string[] = [];
     const values: any[] = [];
     
-    // Define explicit field mappings
     const fieldMap: Record<string, string> = {
-      strategyId: 'strategy_id',
-      modelTier: 'model_tier',
-      systemPrompt: 'system_prompt',
-      userPrompt: 'user_prompt',
-      includeApiData: 'include_api_data',
-      outputVariable: 'output_variable',
-      orderIndex: 'order_index',
-      // Direct mappings (no transformation needed)
       name: 'name',
-      enabled: 'enabled'
+      promptTemplate: 'prompt_template',
+      modelTier: 'model_tier',
+      orderIndex: 'order_index'
     };
     
-    Object.entries(updates).forEach(([key, value]) => {
+    Object.entries(modelCallData).forEach(([key, value]) => {
       if (key !== 'id') {
         const dbField = fieldMap[key] || key;
         fields.push(`${dbField} = ?`);
-        // Convert boolean to integer for SQLite
-        values.push(['enabled', 'includeApiData'].includes(key) ? (value ? 1 : 0) : value);
+        values.push(value);
       }
     });
     
     if (fields.length > 0) {
       values.push(id);
       const query = `UPDATE model_calls SET ${fields.join(', ')} WHERE id = ?`;
-      console.log('🔧 Executing SQL:', query, 'with values:', values);
       db.prepare(query).run(...values);
     }
   }
@@ -322,7 +310,6 @@ export class StrategyFlowService {
     if (fields.length > 0) {
       values.push(id);
       const query = `UPDATE condition_nodes SET ${fields.join(', ')} WHERE id = ?`;
-      console.log('🔧 Executing SQL:', query, 'with values:', values);
       db.prepare(query).run(...values);
     }
   }
@@ -411,7 +398,6 @@ export class StrategyFlowService {
     if (fields.length > 0) {
       values.push(id);
       const query = `UPDATE strategy_trigger_nodes SET ${fields.join(', ')} WHERE id = ?`;
-      console.log('🔧 Executing SQL:', query, 'with values:', values);
       db.prepare(query).run(...values);
     }
   }
@@ -497,7 +483,6 @@ export class StrategyFlowService {
     if (fields.length > 0) {
       values.push(id);
       const query = `UPDATE telegram_message_nodes SET ${fields.join(', ')} WHERE id = ?`;
-      console.log('🔧 Executing SQL:', query, 'with values:', values);
       db.prepare(query).run(...values);
     }
   }
@@ -737,19 +722,30 @@ export class StrategyFlowService {
   }
   
   private saveExecutionLog(executionId: number, log: FlowExecutionLog): void {
-    db.prepare(`
-      INSERT INTO flow_execution_logs 
-      (execution_id, step_type, step_id, input, output, error, duration)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      executionId,
-      log.stepType,
-      log.stepId,
-      log.input ? JSON.stringify(log.input) : null,
-      log.output ? JSON.stringify(log.output) : null,
-      log.error || null,
-      log.duration
-    );
+    const fields: string[] = [];
+    const values: any[] = [];
+    
+    const fieldMap: Record<string, string> = {
+      executionId: 'execution_id',
+      stepType: 'step_type',
+      stepId: 'step_id',
+      input: 'input',
+      output: 'output',
+      error: 'error',
+      duration: 'duration'
+    };
+    
+    Object.entries(log).forEach(([key, value]) => {
+      const dbField = fieldMap[key] || key;
+      fields.push(`${dbField} = ?`);
+      values.push(value);
+    });
+    
+    if (fields.length > 0) {
+      values.push(executionId);
+      const query = `UPDATE flow_execution_logs SET ${fields.join(', ')} WHERE execution_id = ?`;
+      db.prepare(query).run(...values);
+    }
   }
 
   // ===== TESTING UTILITIES =====
@@ -841,60 +837,29 @@ export class StrategyFlowService {
     return {};
   }
 
-  private async executeConditionNode(conditionNode: ConditionNode, variables: Record<string, any>): Promise<any> {
-    const leftValue = this.getVariableValue(conditionNode.leftOperand, variables);
-    const rightValue = conditionNode.rightOperand;
-    
-    let result = false;
-    
+  private async executeConditionNode(conditionNode: ConditionNode, variables: Record<string, any>): Promise<boolean> {
     try {
+      const leftValue = this.getVariableValue(conditionNode.leftOperand, variables);
+      const rightValue = this.getVariableValue(conditionNode.rightOperand, variables);
+      
+      let result = false;
       switch (conditionNode.operator) {
-        case '==':
-          result = leftValue == rightValue;
-          break;
-        case '!=':
-          result = leftValue != rightValue;
-          break;
-        case '>':
-          result = Number(leftValue) > Number(rightValue);
-          break;
-        case '<':
-          result = Number(leftValue) < Number(rightValue);
-          break;
-        case '>=':
-          result = Number(leftValue) >= Number(rightValue);
-          break;
-        case '<=':
-          result = Number(leftValue) <= Number(rightValue);
-          break;
-        case 'contains':
-          result = String(leftValue).includes(String(rightValue));
-          break;
-        case 'startsWith':
-          result = String(leftValue).startsWith(String(rightValue));
-          break;
-        case 'endsWith':
-          result = String(leftValue).endsWith(String(rightValue));
-          break;
+        case '>': result = Number(leftValue) > Number(rightValue); break;
+        case '<': result = Number(leftValue) < Number(rightValue); break;
+        case '>=': result = Number(leftValue) >= Number(rightValue); break;
+        case '<=': result = Number(leftValue) <= Number(rightValue); break;
+        case '==': result = leftValue == rightValue; break;
+        case '!=': result = leftValue != rightValue; break;
+        case 'contains': result = String(leftValue).includes(String(rightValue)); break;
         default:
           throw new Error(`Unknown operator: ${conditionNode.operator}`);
       }
+      
+      return result;
     } catch (error) {
       console.error(`Condition evaluation failed:`, error);
-      result = false;
+      return false;
     }
-    
-    // Set output variables based on result
-    if (result && conditionNode.trueOutputVariable) {
-      variables[conditionNode.trueOutputVariable] = true;
-    }
-    if (!result && conditionNode.falseOutputVariable) {
-      variables[conditionNode.falseOutputVariable] = true;
-    }
-    
-    console.log(`[Condition Node] ${conditionNode.name}: ${leftValue} ${conditionNode.operator} ${rightValue} = ${result}`);
-    
-    return { result, leftValue, rightValue };
   }
   
   private async executeStrategyTriggerNode(triggerNode: StrategyTriggerNode, variables: Record<string, any>): Promise<any> {
@@ -1001,7 +966,6 @@ export class StrategyFlowService {
     if (telegramNode.onlyIfVariable) {
       const conditionValue = variables[telegramNode.onlyIfVariable];
       if (!conditionValue) {
-        console.log(`[Telegram Message] ${telegramNode.name}: Condition not met (${telegramNode.onlyIfVariable} = ${conditionValue})`);
         return { sent: false, reason: 'condition_not_met' };
       }
     }
@@ -1012,41 +976,24 @@ export class StrategyFlowService {
     // Add API data if requested
     if (telegramNode.includeApiData) {
       const apiDataSummary = this.buildApiDataSummary(variables);
-      finalMessage = `${apiDataSummary}\n\n${finalMessage}`;
+      if (apiDataSummary) {
+        finalMessage += `\n\nAPI Data:\n${apiDataSummary}`;
+      }
     }
     
-    console.log(`[Telegram Message] ${telegramNode.name}: Sending to ${telegramNode.chatId}`);
-    console.log(`Message: ${finalMessage}`);
-    
     try {
-      // Import sendMessage dynamically to avoid circular dependencies
+      // Import and use the telegram gateway
       const { sendMessage } = await import('../telegram/gateway');
-      
-      // Actually send the message to Telegram
       const telegramResult = await sendMessage(finalMessage);
       
-      console.log(`[Telegram Message] ${telegramNode.name}: Successfully sent to Telegram`, telegramResult);
-      
-      return {
-        sent: true,
-        chatId: telegramNode.chatId,
-        message: finalMessage,
-        messageType: telegramNode.messageType,
-        parseMode: telegramNode.parseMode,
-        telegramResult
+      return { 
+        sent: true, 
+        messageId: telegramResult?.message_id,
+        message: finalMessage 
       };
     } catch (error) {
-      console.error(`[Telegram Message] ${telegramNode.name}: Failed to send to Telegram:`, error);
-      
-      // Return mock result as fallback if Telegram fails
-      return {
-        sent: false,
-        chatId: telegramNode.chatId,
-        message: finalMessage,
-        messageType: telegramNode.messageType,
-        parseMode: telegramNode.parseMode,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
+      console.error(`Telegram message ${telegramNode.name} failed:`, error);
+      throw error;
     }
   }
   

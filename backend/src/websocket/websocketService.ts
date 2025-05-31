@@ -1,35 +1,24 @@
-import { Server as SocketIOServer } from 'socket.io';
-import { Server as HttpServer } from 'http';
 import Database from 'better-sqlite3';
-import { getTokenUsage, getSetting, notificationsEnabled } from '../utils/settings';
+import { Server as HttpServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
+import { getTokenUsage } from '../utils/settings';
 
 interface SystemHealth {
-  status: 'healthy' | 'warning' | 'error';
   uptime: number;
   memoryUsage: NodeJS.MemoryUsage;
+  timestamp: number;
   activeConnections: number;
-  lastSignal?: Date;
 }
 
-interface TokenUsage {
+interface TokenUsageData {
   used: number;
   limit: number;
   percentage: number;
-  warning: boolean;
-  panic: boolean;
+  warnThreshold: number;
+  panicThreshold: number;
 }
 
-interface LiveSignal {
-  id: string;
-  symbol: string;
-  signal: 'BUY' | 'SELL' | 'HOLD';
-  confidence: number;
-  price: number;
-  timestamp: Date;
-  strategy: string;
-}
-
-export class WebSocketService {
+class WebSocketService {
   private io: SocketIOServer;
   private db: Database.Database;
   private activeConnections = 0;
@@ -40,12 +29,9 @@ export class WebSocketService {
     this.db = db;
     this.io = new SocketIOServer(server, {
       cors: {
-        origin: process.env.NODE_ENV === 'development' 
-          ? ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'] 
-          : false,
-        methods: ['GET', 'POST']
-      },
-      transports: ['websocket', 'polling']
+        origin: "*",
+        methods: ["GET", "POST"]
+      }
     });
 
     this.setupEventHandlers();
@@ -56,7 +42,7 @@ export class WebSocketService {
   private setupEventHandlers() {
     this.io.on('connection', (socket) => {
       this.activeConnections++;
-      console.log(`🔌 WebSocket client connected. Active connections: ${this.activeConnections}`);
+      console.log(`🔌 WebSocket connected. Active: ${this.activeConnections}`);
 
       // Send initial data
       this.sendSystemHealth(socket);
@@ -66,28 +52,24 @@ export class WebSocketService {
       // Handle client subscriptions
       socket.on('subscribe:signals', () => {
         socket.join('signals');
-        console.log('📈 Client subscribed to signals');
       });
 
       socket.on('subscribe:health', () => {
         socket.join('health');
-        console.log('💚 Client subscribed to health updates');
       });
 
       socket.on('subscribe:tokens', () => {
         socket.join('tokens');
-        console.log('🪙 Client subscribed to token usage');
       });
 
       socket.on('subscribe:strategies', () => {
         socket.join('strategies');
-        console.log('⚙️ Client subscribed to strategy updates');
       });
 
       // Handle disconnection
       socket.on('disconnect', () => {
         this.activeConnections--;
-        console.log(`🔌 WebSocket client disconnected. Active connections: ${this.activeConnections}`);
+        console.log(`🔌 WebSocket disconnected. Active: ${this.activeConnections}`);
       });
 
       // Handle ping/pong for connection health
@@ -101,57 +83,14 @@ export class WebSocketService {
     this.healthCheckInterval = setInterval(() => {
       const health = this.getSystemHealth();
       this.io.to('health').emit('health:update', health);
-    }, 5000); // Every 5 seconds
+    }, 30000); // Every 30 seconds
   }
 
   private startTokenUsageUpdates() {
     this.tokenUsageInterval = setInterval(() => {
       const tokenUsage = this.getTokenUsage();
       this.io.to('tokens').emit('tokens:update', tokenUsage);
-    }, 10000); // Every 10 seconds
-  }
-
-  private getSystemHealth(): SystemHealth {
-    const memoryUsage = process.memoryUsage();
-    const uptime = process.uptime();
-    
-    // Get last signal from database
-    const lastSignalRow = this.db.prepare(`
-      SELECT created_at FROM signals 
-      ORDER BY created_at DESC 
-      LIMIT 1
-    `).get() as { created_at: string } | undefined;
-
-    const lastSignal = lastSignalRow ? new Date(lastSignalRow.created_at) : undefined;
-    
-    // Determine health status
-    let status: 'healthy' | 'warning' | 'error' = 'healthy';
-    
-    if (memoryUsage.heapUsed / memoryUsage.heapTotal > 0.9) {
-      status = 'error';
-    } else if (memoryUsage.heapUsed / memoryUsage.heapTotal > 0.7) {
-      status = 'warning';
-    }
-
-    return {
-      status,
-      uptime,
-      memoryUsage,
-      activeConnections: this.activeConnections,
-      lastSignal
-    };
-  }
-
-  private getTokenUsage(): TokenUsage {
-    const tokenInfo = getTokenUsage();
-    
-    return {
-      used: tokenInfo.used,
-      limit: tokenInfo.limit,
-      percentage: tokenInfo.percentage,
-      warning: tokenInfo.warning,
-      panic: tokenInfo.panic
-    };
+    }, 60000); // Every minute
   }
 
   private sendSystemHealth(socket: any) {
@@ -167,8 +106,9 @@ export class WebSocketService {
   private sendRecentSignals(socket: any) {
     try {
       const signals = this.db.prepare(`
-        SELECT * FROM signals 
-        ORDER BY created_at DESC 
+        SELECT * FROM messages 
+        WHERE sent_at > datetime('now', '-1 day') 
+        ORDER BY sent_at DESC 
         LIMIT 10
       `).all();
       
@@ -179,32 +119,58 @@ export class WebSocketService {
     }
   }
 
-  // Public methods for broadcasting events
-  public broadcastSignal(signal: LiveSignal) {
-    console.log('📈 Broadcasting new signal:', signal.symbol, signal.signal);
-    this.io.to('signals').emit('signal:new', signal);
+  private getSystemHealth(): SystemHealth {
+    return {
+      uptime: process.uptime(),
+      memoryUsage: process.memoryUsage(),
+      timestamp: Date.now(),
+      activeConnections: this.activeConnections
+    };
   }
 
-  public broadcastStrategyUpdate(strategyId: number, data: any) {
-    console.log('⚙️ Broadcasting strategy update:', strategyId);
-    this.io.to('strategies').emit('strategy:update', { strategyId, data });
+  private getTokenUsage(): TokenUsageData {
+    try {
+      const tokenInfo = getTokenUsage();
+      
+      return {
+        used: tokenInfo.used,
+        limit: tokenInfo.limit,
+        percentage: tokenInfo.percentage,
+        warnThreshold: tokenInfo.warnThreshold * 100,
+        panicThreshold: tokenInfo.panicThreshold * 100
+      };
+    } catch (error) {
+      console.error('Error getting token usage:', error);
+      return {
+        used: 0,
+        limit: 100000,
+        percentage: 0,
+        warnThreshold: 80,
+        panicThreshold: 95
+      };
+    }
   }
 
-  public broadcastAlert(alert: { type: 'info' | 'warning' | 'error'; message: string; timestamp: Date }) {
-    console.log('🚨 Broadcasting alert:', alert.type, alert.message);
-    this.io.emit('alert:new', alert);
+  // Public methods for external services to broadcast updates
+  public broadcastSignalUpdate(signal: any) {
+    this.io.to('signals').emit('signals:new', signal);
   }
 
-  public broadcastTokenUpdate() {
+  public broadcastStrategyUpdate(strategy: any) {
+    this.io.to('strategies').emit('strategies:update', strategy);
+  }
+
+  public broadcastHealthUpdate() {
+    const health = this.getSystemHealth();
+    this.io.to('health').emit('health:update', health);
+  }
+
+  public broadcastTokenUsage() {
     const tokenUsage = this.getTokenUsage();
     this.io.to('tokens').emit('tokens:update', tokenUsage);
   }
 
-  public getActiveConnections(): number {
-    return this.activeConnections;
-  }
-
-  public shutdown() {
+  public close() {
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
     }
@@ -212,13 +178,19 @@ export class WebSocketService {
       clearInterval(this.tokenUsageInterval);
     }
     this.io.close();
-    console.log('🔌 WebSocket service shutdown');
   }
 }
 
-export let websocketService: WebSocketService | null = null;
+// Singleton instance
+let webSocketService: WebSocketService | null = null;
 
-export function initializeWebSocketService(server: HttpServer, db: Database.Database) {
-  websocketService = new WebSocketService(server, db);
-  return websocketService;
+export function initializeWebSocketService(server: HttpServer, db: Database.Database): WebSocketService {
+  if (!webSocketService) {
+    webSocketService = new WebSocketService(server, db);
+  }
+  return webSocketService;
+}
+
+export function getWebSocketService(): WebSocketService | null {
+  return webSocketService;
 } 

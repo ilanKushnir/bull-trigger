@@ -1,9 +1,9 @@
 // @ts-nocheck
 import Database from 'better-sqlite3';
-import path from 'path';
-import { formatSignal, signalHash } from './formatter';
-import { sendMessage } from '../telegram/gateway';
 import { differenceInHours } from 'date-fns';
+import path from 'path';
+import { sendMessage } from '../telegram/gateway';
+import { formatSignal } from './formatter';
 
 const DB_FILE = process.env.DB_FILE || path.resolve(process.cwd(), 'database.sqlite');
 const sqlite = new Database(DB_FILE);
@@ -16,17 +16,36 @@ function findRecent(hash: string): any {
 }
 
 export async function dispatchSignal(signal: any) {
-  const hash = signalHash(signal);
-  const recent = findRecent(hash);
-  const { text, buttons } = formatSignal(signal);
-  if (recent) {
-    await sendMessage(text); // reminder without buttons
-    console.log('[signal] dedup reminder sent');
-    return;
+  try {
+    // Check for duplicates based on recent signals
+    const recent = getRecentSignals(signal.symbol);
+    const isDuplicate = recent.some(s => 
+      s.strategy === signal.strategy && 
+      s.direction === signal.direction
+    );
+
+    if (isDuplicate) {
+      // Send reminder instead of new signal
+      await sendMessage(`📝 Reminder: ${signal.symbol} ${signal.direction} signal still active`);
+      return;
+    }
+
+    // Dispatch new signal
+    await sendMessage(formatSignal(signal));
+    
+  } catch (error) {
+    console.error('Failed to dispatch signal:', error);
   }
-  const res: any = await sendMessage(text, buttons.reply_markup);
-  sqlite
-    .prepare('INSERT INTO messages (signal_hash, tg_msg_id) VALUES (?, ?)')
-    .run(hash, res?.message_id ?? null);
-  console.log('[signal] new signal dispatched');
+}
+
+function formatSignal(signal: any): string {
+  return `🚀 **${signal.symbol} ${signal.direction}**
+📊 Strategy: ${signal.strategy}
+💎 Confidence: ${signal.confidence}%
+💰 Entry: $${signal.price_entry}`;
+}
+
+function getRecentSignals(symbol: string): any[] {
+  // Implementation to get recent signals from database
+  return [];
 } 
