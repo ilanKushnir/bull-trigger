@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { useEffect, useState } from 'react';
+import StrategyFlowEditor from '../components/StrategyFlowEditor';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
-import { useApi, Strategy } from '../services/websocketService';
+import { Card, CardContent } from '../components/ui/card';
+import { Strategy, useApi } from '../services/websocketService';
 import { cronToHuman } from '../utils/cronUtils';
-import StrategyFlowEditor from '../components/StrategyFlowEditor';
 
 // Extended Strategy interface for the Strategies page
 interface ExtendedStrategy extends Strategy {
@@ -70,27 +70,31 @@ export default function Strategies() {
   
   const api = useApi();
 
+  // Function to refetch strategies data
+  const refetchStrategies = async () => {
+    const result = await api.getStrategies();
+    
+    if (result.success && result.data) {
+      const enrichedStrategies: ExtendedStrategy[] = result.data.map(strategy => ({
+        ...strategy,
+        model_tier: (strategy.modelTier === 'deep' ? 'deep' : 'cheap') as 'cheap' | 'deep',
+        trigger_json: strategy.triggers ? JSON.stringify(strategy.triggers) : '{"type": "cron_only"}',
+        last_run: strategy.lastRun ? new Date(strategy.lastRun) : undefined,
+        next_run: strategy.nextRun ? new Date(strategy.nextRun) : undefined,
+        success_rate: strategy.successRate || 0,
+        total_runs: strategy.totalRuns || 0
+      }));
+      setStrategies(enrichedStrategies);
+    } else {
+      console.error('Failed to fetch strategies:', result.error);
+      setStrategies([]);
+    }
+  };
+
   useEffect(() => {
     const fetchStrategies = async () => {
       setLoading(true);
-      const result = await api.getStrategies();
-      
-      if (result.success && result.data) {
-        const enrichedStrategies: ExtendedStrategy[] = result.data.map(strategy => ({
-          ...strategy,
-          model_tier: (strategy.modelTier === 'deep' ? 'deep' : 'cheap') as 'cheap' | 'deep',
-          trigger_json: strategy.triggers ? JSON.stringify(strategy.triggers) : '{"type": "cron_only"}',
-          last_run: strategy.lastRun ? new Date(strategy.lastRun) : undefined,
-          next_run: strategy.nextRun ? new Date(strategy.nextRun) : undefined,
-          success_rate: strategy.successRate || 0,
-          total_runs: strategy.totalRuns || 0
-        }));
-        setStrategies(enrichedStrategies);
-      } else {
-        console.error('Failed to fetch strategies:', result.error);
-        setStrategies([]);
-      }
-      
+      await refetchStrategies();
       setLoading(false);
     };
 
@@ -260,6 +264,7 @@ export default function Strategies() {
         <StrategyFlowEditor
           strategyId={Number(showFlowEditor)}
           onClose={() => setShowFlowEditor(null)}
+          onRefetch={refetchStrategies}
         />
       )}
     </div>

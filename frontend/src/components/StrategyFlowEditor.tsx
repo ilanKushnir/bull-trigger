@@ -1,50 +1,48 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import {
+    CpuChipIcon as BrainIcon,
+    CheckIcon,
+    CommandLineIcon as ConditionIcon,
+    PencilIcon as EditIcon,
+    GlobeAltIcon as GlobeIcon,
+    PlayCircleIcon,
+    PlayIcon,
+    PlusIcon,
+    PaperAirplaneIcon as TelegramIcon,
+    BeakerIcon as TestTubeIcon,
+    TrashIcon,
+    ArrowPathIcon as TriggerIcon,
+    XMarkIcon
+} from '@heroicons/react/24/outline';
+import { useCallback, useEffect, useState } from 'react';
+import ReactFlow, {
+    addEdge,
+    Background,
+    BackgroundVariant,
+    Connection,
+    ConnectionLineType,
+    Controls,
+    Edge,
+    Handle,
+    MarkerType,
+    Node,
+    NodeTypes,
+    Position,
+    useEdgesState,
+    useNodesState,
+} from 'reactflow';
+import 'reactflow/dist/style.css';
+import { useApi } from '../services/websocketService';
+import { Badge } from './ui/badge';
 import { Button } from './ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Badge } from './ui/badge';
-import { Separator } from './ui/separator';
-import { useApi } from '../services/websocketService';
-import ReactFlow, {
-  Controls,
-  Background,
-  useNodesState,
-  useEdgesState,
-  addEdge,
-  Connection,
-  Edge,
-  Node,
-  NodeTypes,
-  Position,
-  MarkerType,
-  ConnectionLineType,
-  BackgroundVariant,
-  Handle,
-} from 'reactflow';
-import 'reactflow/dist/style.css';
-import { 
-  PlusIcon, 
-  TrashIcon, 
-  PlayIcon, 
-  PencilIcon as EditIcon, 
-  GlobeAltIcon as GlobeIcon, 
-  CpuChipIcon as BrainIcon,
-  BeakerIcon as TestTubeIcon,
-  ArrowRightIcon,
-  CheckIcon,
-  XMarkIcon,
-  CommandLineIcon as ConditionIcon,
-  ArrowPathIcon as TriggerIcon,
-  PaperAirplaneIcon as TelegramIcon,
-  PlayCircleIcon as StartIcon
-} from '@heroicons/react/24/outline';
 
 interface StrategyFlowEditorProps {
   strategyId: number;
   onClose: () => void;
+  onRefetch?: () => Promise<void>;
 }
 
 interface ApiCall {
@@ -113,23 +111,36 @@ interface TelegramMessageNode {
 // Custom Node Components
 const StartNode = ({ data }: { data: any }) => {
   return (
-    <div className="px-4 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-lg shadow-lg border-2 border-emerald-500 min-w-[120px]">
+    <div className="px-4 py-3 bg-green-700 text-white rounded-lg shadow-lg border-2 border-green-600 min-w-[240px] max-w-[280px]">
       <Handle
         type="source"
         position={Position.Right}
         id="start-output"
-        className="!bg-emerald-300 !border-emerald-600 !w-3 !h-3"
+        className="!bg-green-300 !border-green-600 !w-3 !h-3"
       />
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-          </svg>
-        </div>
-        <div>
-          <div className="font-semibold text-sm">Start</div>
-          <div className="text-xs text-green-100">Strategy Trigger</div>
-        </div>
+      <div className="flex items-center space-x-2 mb-2">
+        <PlayCircleIcon className="w-4 h-4 text-green-100" />
+        <div className="font-medium text-white text-sm">START</div>
+        <Badge variant="success" className="text-xs px-1 py-0">
+          {data.enabled ? 'ON' : 'OFF'}
+        </Badge>
+      </div>
+      <div className="text-xs text-green-100 mb-1 font-medium">{data.name}</div>
+      <div className="text-xs text-green-200 mb-1 truncate">
+        {data.description || 'No description'}
+      </div>
+      <div className="text-xs text-green-200 mb-2 font-mono">
+        📅 {data.cron || '*/5 * * * *'}
+      </div>
+      
+      <div className="flex justify-end space-x-1">
+        <button 
+          onClick={() => data.onEdit?.(data)} 
+          className="w-6 h-6 rounded-full bg-slate-500 hover:bg-slate-400 flex items-center justify-center transition-colors group"
+          title="Edit Strategy"
+        >
+          <EditIcon className="w-3 h-3 text-white group-hover:text-slate-100" />
+        </button>
       </div>
     </div>
   );
@@ -390,12 +401,12 @@ const TelegramMessageNode = ({ data }: { data: any }) => {
 };
 
 const nodeTypes: NodeTypes = {
+  start: StartNode,
   apiCall: ApiCallNode,
   modelCall: ModelCallNode,
-  conditionNode: ConditionNode,
+  condition: ConditionNode,
   strategyTrigger: StrategyTriggerNode,
   telegramMessage: TelegramMessageNode,
-  startNode: StartNode,
 };
 
 // Add edge styles
@@ -405,14 +416,14 @@ const edgeOptions = {
   type: 'smoothstep',
 };
 
-export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlowEditorProps) {
+export default function StrategyFlowEditor({ strategyId, onClose, onRefetch }: StrategyFlowEditorProps) {
   const [apiCalls, setApiCalls] = useState<ApiCall[]>([]);
   const [modelCalls, setModelCalls] = useState<ModelCall[]>([]);
   const [conditionNodes, setConditionNodes] = useState<ConditionNode[]>([]);
   const [strategyTriggerNodes, setStrategyTriggerNodes] = useState<StrategyTriggerNode[]>([]);
   const [telegramMessageNodes, setTelegramMessageNodes] = useState<TelegramMessageNode[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTab, setSelectedTab] = useState<'flow' | 'api' | 'model' | 'condition' | 'trigger' | 'telegram'>('flow');
+  const [selectedTab, setSelectedTab] = useState<'flow' | 'api' | 'model' | 'condition' | 'trigger' | 'telegram' | 'settings'>('flow');
   const [editingApiCall, setEditingApiCall] = useState<ApiCall | null>(null);
   const [editingModelCall, setEditingModelCall] = useState<ModelCall | null>(null);
   const [editingConditionNode, setEditingConditionNode] = useState<ConditionNode | null>(null);
@@ -422,6 +433,8 @@ export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlow
   const [testing, setTesting] = useState(false);
   const [executionLogs, setExecutionLogs] = useState<any[]>([]);
   const [executing, setExecuting] = useState(false);
+  const [strategy, setStrategy] = useState<any>(null);
+  const [editingStrategy, setEditingStrategy] = useState<any>(null);
   
   // React Flow states
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -435,13 +448,16 @@ export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlow
   );
 
   useEffect(() => {
-    loadStrategyFlow();
+    if (strategyId) {
+      loadStrategyFlow();
+      loadStrategy();
+    }
   }, [strategyId]);
 
   // Update React Flow nodes when API/model calls change
   useEffect(() => {
     updateFlowNodes();
-  }, [apiCalls, modelCalls, conditionNodes, strategyTriggerNodes, telegramMessageNodes]);
+  }, [apiCalls, modelCalls, conditionNodes, strategyTriggerNodes, telegramMessageNodes, strategy]);
 
   // Debug edges
   useEffect(() => {
@@ -506,11 +522,14 @@ export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlow
     // Add start node
     const startNode: Node = {
       id: 'start-node',
-      type: 'startNode',
+      type: 'start',
       position: { x: 50, y: 50 },
       data: {
-        triggerType: 'cron',
-        cronExpression: '0 9 * * *'
+        name: strategy?.name || 'Strategy',
+        description: strategy?.description || 'No description',
+        cron: strategy?.cron || '*/5 * * * *',
+        enabled: strategy?.enabled || false,
+        onEdit: () => setEditingStrategy(strategy)
       },
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
@@ -768,6 +787,20 @@ export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlow
       console.error('🔗 Exception while loading strategy flow:', error);
     }
     setLoading(false);
+  };
+
+  const loadStrategy = async () => {
+    try {
+      const result = await api.getStrategies();
+      if (result.success && result.data) {
+        const currentStrategy = result.data.find(s => s.id === strategyId);
+        if (currentStrategy) {
+          setStrategy(currentStrategy);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading strategy:', error);
+    }
   };
 
   const handleSaveApiCall = async (apiCall: ApiCall) => {
@@ -1439,6 +1472,25 @@ export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlow
     }
   };
 
+  const handleSaveStrategy = async (strategyData: any) => {
+    try {
+      const result = await api.updateStrategy(strategyId, strategyData);
+      if (result.success) {
+        await loadStrategy();
+        // Refresh parent component's strategy data
+        if (onRefetch) {
+          await onRefetch();
+        }
+        setEditingStrategy(null);
+        // Success feedback will be visible through the updated UI
+      } else {
+        alert(`Failed to update strategy: ${result.error}`);
+      }
+    } catch (error) {
+      alert(`Error updating strategy: ${error}`);
+    }
+  };
+
   if (loading) {
     return (
       <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center">
@@ -1503,6 +1555,13 @@ export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlow
                 >
                   Telegram ({telegramMessageNodes.length})
                 </Button>
+                <Button
+                  variant={selectedTab === 'settings' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSelectedTab('settings')}
+                >
+                  Settings
+                </Button>
               </div>
             </CardHeader>
             
@@ -1513,6 +1572,52 @@ export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlow
               {selectedTab === 'condition' && renderConditionNodesTab()}
               {selectedTab === 'trigger' && renderStrategyTriggerNodesTab()}
               {selectedTab === 'telegram' && renderTelegramMessageNodesTab()}
+              {selectedTab === 'settings' && (
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-semibold text-white">Strategy Settings</h3>
+                    <Button onClick={() => setEditingStrategy(strategy)} className="flex items-center space-x-2">
+                      <EditIcon className="w-4 h-4" />
+                      <span>Edit Strategy</span>
+                    </Button>
+                  </div>
+                  
+                  {strategy ? (
+                    <div className="grid gap-6">
+                      <Card className="bg-gray-800 border-gray-700">
+                        <CardContent className="p-6">
+                          <div className="grid gap-4">
+                            <div>
+                              <Label className="text-white">Name</Label>
+                              <div className="text-gray-300 font-medium">{strategy.name}</div>
+                            </div>
+                            <div>
+                              <Label className="text-white">Description</Label>
+                              <div className="text-gray-300">{strategy.description || 'No description provided'}</div>
+                            </div>
+                            <div>
+                              <Label className="text-white">Schedule (Cron)</Label>
+                              <div className="text-gray-300 font-mono">{strategy.cron}</div>
+                            </div>
+                            <div>
+                              <Label className="text-white">Status</Label>
+                              <Badge variant={strategy.enabled ? 'success' : 'default'}>
+                                {strategy.enabled ? 'Enabled' : 'Disabled'}
+                              </Badge>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  ) : (
+                    <Card className="bg-gray-800 border-gray-700">
+                      <CardContent className="p-8 text-center">
+                        <div className="text-gray-400">Loading strategy settings...</div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -1543,6 +1648,15 @@ export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlow
           telegramNode={editingTelegramMessageNode}
           onSave={handleSaveTelegramMessageNode}
           onCancel={() => setEditingTelegramMessageNode(null)}
+        />
+      )}
+
+      {/* Strategy Settings Editor Modal */}
+      {editingStrategy && (
+        <StrategySettingsEditor
+          strategy={editingStrategy}
+          onSave={handleSaveStrategy}
+          onCancel={() => setEditingStrategy(null)}
         />
       )}
     </div>
@@ -2120,6 +2234,84 @@ function TelegramMessageNodeEditor({
           <div className="flex justify-end space-x-2 pt-4">
             <Button variant="outline" onClick={onCancel}>Cancel</Button>
             <Button onClick={() => onSave(formData)}>Save</Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// Strategy Settings Editor Component
+function StrategySettingsEditor({ 
+  strategy, 
+  onSave, 
+  onCancel 
+}: { 
+  strategy: any; 
+  onSave: (strategyData: any) => void; 
+  onCancel: () => void;
+}) {
+  const [formData, setFormData] = useState(strategy);
+
+  const handleSave = () => {
+    // Ensure all required fields are present and properly formatted
+    const cleanedData = {
+      ...formData,
+      // Trim whitespace and ensure proper formatting
+      name: formData.name.trim(),
+      description: formData.description?.trim() || undefined,
+      cron: formData.cron?.trim() || undefined,
+    };
+    
+    console.log('🔧 Saving strategy with data:', cleanedData);
+    onSave(cleanedData);
+  };
+
+  return (
+    <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <Card className="w-full max-w-3xl">
+        <CardHeader>
+          <CardTitle className="text-white">
+            {strategy ? 'Edit Strategy' : 'New Strategy'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4">
+            <div>
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                placeholder="Strategy Name"
+              />
+            </div>
+            <div>
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={formData.description || ''}
+                onChange={(e) => setFormData({...formData, description: e.target.value || undefined})}
+                placeholder="Strategy Description"
+                rows={3}
+              />
+            </div>
+            <div>
+              <Label htmlFor="cron">Cron Expression</Label>
+              <Input
+                id="cron"
+                value={formData.cron || ''}
+                onChange={(e) => setFormData({...formData, cron: e.target.value})}
+                placeholder="0 9 * * *"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Format: minute hour day month weekday (e.g., "0 9 * * *" = 9 AM daily)
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button variant="outline" onClick={onCancel}>Cancel</Button>
+            <Button onClick={() => handleSave()}>Save</Button>
           </div>
         </CardContent>
       </Card>

@@ -1,7 +1,9 @@
 // @ts-nocheck
 import Database from 'better-sqlite3';
-import cron from 'node-cron';
+import { CronJob } from 'cron';
 import path from 'path';
+import { StrategyExecutionService } from '../services/strategyExecutionService';
+import { StrategyFlowService } from '../services/strategyFlowService';
 import { AbstractStrategy, StrategyContext } from './abstract';
 import { TokenWatcherStrategy } from './tokenWatcher';
 import { WeeklyEducationStrategy } from './weeklyEducation';
@@ -14,9 +16,13 @@ const DB_FILE = process.env.DB_FILE || (isInBackendDir
   : path.resolve(cwd, 'backend/database.sqlite'));
 const sqlite = new Database(DB_FILE);
 
+// Initialize services
+const strategyFlowService = new StrategyFlowService();
+const strategyExecutionService = new StrategyExecutionService();
+
 type JobEntry = {
   strategy: any;
-  task: cron.ScheduledTask;
+  task: CronJob;
 };
 
 const jobs: Record<number, JobEntry> = {};
@@ -26,29 +32,93 @@ const STRATEGY_MAP: Record<string, any> = {
   TokenWatcher: TokenWatcherStrategy
 };
 
+// Generic strategy implementation that uses StrategyFlowService
+class GenericStrategy extends AbstractStrategy {
+  async execute(): Promise<void> {
+    const startTime = Date.now();
+    console.log(`🚀 Executing: ${this.ctx.name}`);
+    
+    try {
+      // Start execution tracking
+      const executionId = strategyExecutionService.startExecution(this.ctx.id, 'cron');
+      
+      // Execute the strategy flow
+      const result = await strategyFlowService.executeStrategyFlow(this.ctx.id, executionId);
+      
+      const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+      
+      if (result.success) {
+        strategyExecutionService.completeExecution(executionId);
+        console.log(`✅ ${this.ctx.name} completed (${duration}s total)`);
+      } else {
+        strategyExecutionService.failExecution(executionId, result.error);
+        console.error(`❌ ${this.ctx.name} failed: ${result.error} (${duration}s)`);
+      }
+    } catch (error) {
+      const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.error(`💥 ${this.ctx.name} crashed: ${error} (${duration}s)`);
+    }
+  }
+}
+
 function loadEnabledStrategies() {
   return sqlite.prepare('SELECT * FROM strategies WHERE enabled = 1').all();
 }
 
 export function refreshRegistry() {
+  console.log('🔄 Refreshing strategy registry...');
+  
   // stop existing
   for (const id in jobs) {
     jobs[id].task.stop();
     delete jobs[id];
   }
+  
   const rows = loadEnabledStrategies();
+  console.log(`📋 Found ${rows.length} enabled strategies`);
+  
   for (const row of rows) {
-    const ctx: StrategyContext = {
-      id: row.id,
-      name: row.name,
-      triggers: row.triggers ? JSON.parse(row.triggers) : undefined
-    };
-    const implClass = STRATEGY_MAP[row.name] ?? (class extends AbstractStrategy{execute(){}});
-    const impl = new implClass(ctx);
-    const task = cron.schedule(row.cron || '*/5 * * * *', () => impl.execute());
-    jobs[row.id] = { strategy: impl, task };
+    try {
+      const ctx: StrategyContext = {
+        id: row.id,
+        name: row.name,
+        triggers: row.triggers ? JSON.parse(row.triggers) : undefined
+      };
+      
+      // Use the specific strategy implementation if available, otherwise use GenericStrategy
+      const implClass = STRATEGY_MAP[row.name] ?? GenericStrategy;
+      const impl = new implClass(ctx);
+      
+      // Validate and adjust cron expression
+      let cronExpression = row.cron || '*/5 * * * *';
+      
+      // Handle both 5-part and 6-part cron expressions
+      const parts = cronExpression.trim().split(/\s+/);
+      
+      if (parts.length === 6) {
+        // Already 6-part, use as-is
+      } else if (parts.length === 5) {
+        // Convert 5-part to 6-part by adding seconds at the beginning
+        cronExpression = `0 ${cronExpression}`;
+      } else {
+        console.warn(`⚠️ Invalid cron expression for strategy "${row.name}": ${cronExpression}. Using default.`);
+        cronExpression = '0 */5 * * * *'; // Every 5 minutes by default
+      }
+      
+      const task = new CronJob(cronExpression, () => {
+        impl.execute();
+      });
+      
+      task.start();
+      jobs[row.id] = { strategy: impl, task };
+      
+      console.log(`✅ Scheduled "${row.name}" (ID: ${row.id}) - ${cronExpression}`);
+    } catch (error) {
+      console.error(`❌ Failed to schedule strategy "${row.name}" (ID: ${row.id}):`, error);
+    }
   }
-  console.log(`[registry] Loaded ${Object.keys(jobs).length} strategies`);
+  
+  console.log(`✅ Registry loaded ${Object.keys(jobs).length} strategies`);
 }
 
 export function runStrategyOnce(id: number) {

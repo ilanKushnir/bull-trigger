@@ -128,12 +128,47 @@ export const buildServer = async () => {
   fastify.put<{ Params: { id: string }; Body: any }>('/api/strategies/:id', async (req, reply) => {
     const id = Number(req.params.id);
     const body = req.body;
-    sqliteDb.prepare('UPDATE strategies SET enabled = @enabled, cron = @cron, triggers = @triggers WHERE id = @id').run({
-      id,
-      enabled: body.enabled ? 1 : 0,
-      cron: body.cron,
-      triggers: JSON.stringify(body.triggers ?? null)
-    });
+    
+    // Build the update query dynamically based on provided fields
+    const updateFields = [];
+    const updateValues: any = { id };
+    
+    if (body.enabled !== undefined) {
+      updateFields.push('enabled = @enabled');
+      updateValues.enabled = body.enabled ? 1 : 0;
+    }
+    
+    if (body.cron !== undefined) {
+      updateFields.push('cron = @cron');
+      updateValues.cron = body.cron;
+    }
+    
+    if (body.cronExpression !== undefined) {
+      updateFields.push('cron = @cron');
+      updateValues.cron = body.cronExpression;
+    }
+    
+    if (body.name !== undefined) {
+      updateFields.push('name = @name');
+      updateValues.name = body.name;
+    }
+    
+    if (body.description !== undefined) {
+      updateFields.push('description = @description');
+      updateValues.description = body.description;
+    }
+    
+    if (body.triggers !== undefined) {
+      updateFields.push('triggers = @triggers');
+      updateValues.triggers = JSON.stringify(body.triggers);
+    }
+    
+    if (updateFields.length === 0) {
+      return { error: 'No valid fields to update' };
+    }
+    
+    const query = `UPDATE strategies SET ${updateFields.join(', ')} WHERE id = @id`;
+    sqliteDb.prepare(query).run(updateValues);
     refreshRegistry();
     
     return { ok: true };

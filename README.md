@@ -1,8 +1,6 @@
-# Bull Trigger
+# 📈 Bull Trigger
 
-> Open-source crypto signal platform with AI-powered strategies
-
-A self-hostable crypto trading signal generator that uses OpenAI models to analyze market conditions and send intelligent alerts to Telegram.
+> Open-source crypto signal platform with modular strategies, Telegram integration, and modern React dashboard.
 
 ## 🚀 Features
 
@@ -103,3 +101,46 @@ cd frontend && npm test
 ## 📄 License
 
 MIT © 2024 Ilan Kushnir 
+
+## ✨ New Features - Strategy Editing
+
+### 🎨 Strategy Flow Editor
+
+The dashboard now includes comprehensive strategy editing capabilities:
+
+**🚀 Start Node** - Edit core strategy properties:
+- **Name** - Descriptive strategy name
+- **Description** - Strategy purpose and details  
+- **Cron Schedule** - When the strategy runs (e.g., `0 9 * * *` for 9 AM daily)
+- **Enable/Disable** - Toggle strategy activation
+
+**📝 How to Edit Strategies:**
+1. Navigate to **Strategies** page in dashboard
+2. Click **🎨 Flow Editor** button on any strategy
+3. Click the **Settings** tab at the top
+4. Click **Edit Strategy** button to modify core properties
+5. Or click the **edit button** on the green START node in the flow view
+6. Update name, description, and cron schedule
+7. Click **Save** to apply changes
+
+**⚙️ Cron Expression Examples:**
+- **5-part standard format**: `minute hour day month weekday`
+  - `*/5 * * * *` - Every 5 minutes
+  - `0 9 * * *` - Daily at 9 AM
+  - `0 9 * * 1` - Every Monday at 9 AM
+  - `0 0 1 * *` - First day of every month
+
+- **6-part extended format**: `second minute hour day month weekday`
+  - `*/30 * * * * *` - Every 30 seconds
+  - `*/5 * * * * *` - Every 5 seconds
+  - `0 */15 * * * *` - Every 15 minutes (starting at minute 0)
+  - `0 0 9 * * *` - Daily at 9 AM
+
+**🔗 Flow Editing:**
+- Add **API Calls** to fetch market data
+- Add **Model Calls** to analyze with AI
+- Add **Conditions** for logic branching
+- Add **Telegram Messages** to send alerts
+- Add **Strategy Triggers** to chain strategies
+
+All changes are saved in SQLite and take effect immediately! 

@@ -556,13 +556,15 @@ export class StrategyFlowService {
       
       for (const orderIndex of orderedIndices) {
         const group = stepGroups[orderIndex];
-        console.log(`[Flow Execution] Executing group ${orderIndex} with ${group.length} steps ${group.length > 1 ? 'in parallel' : 'sequentially'}`);
         
         // Execute all steps in this group in parallel
         const groupPromises = group.map(async (step) => {
           const startTime = Date.now();
           let stepResult;
           let stepError;
+          
+          // Get emoji for step type
+          const stepEmoji = this.getStepEmoji(step.type);
           
           try {
             if (step.type === 'api_call') {
@@ -582,9 +584,14 @@ export class StrategyFlowService {
             } else if (step.type === 'telegram_message_node') {
               stepResult = await this.executeTelegramMessageNode(step as TelegramMessageNode, variables);
             }
+            
+            const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+            console.log(`  ${stepEmoji} ${step.name} (${duration}s)`);
+            
           } catch (error) {
             stepError = error instanceof Error ? error.message : 'Unknown error';
-            console.error(`Step ${step.name} failed:`, error);
+            const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+            console.error(`  ❌ ${step.name} failed: ${stepError} (${duration}s)`);
             throw error; // Re-throw to stop execution
           }
           
@@ -609,8 +616,6 @@ export class StrategyFlowService {
         
         // Save logs to database
         groupLogs.forEach(log => this.saveExecutionLog(executionId, log));
-        
-        console.log(`[Flow Execution] Group ${orderIndex} completed successfully`);
       }
       
       return {
@@ -680,11 +685,9 @@ export class StrategyFlowService {
         modelCall.systemPrompt
       );
       
-      console.log(`[Model Call] ${modelCall.name}:`, { finalPrompt, response });
-      
       return response; // Return the string response directly
     } catch (error) {
-      console.error(`[Model Call] ${modelCall.name} failed:`, error);
+      console.error(`❌ Model call ${modelCall.name} failed:`, error);
       
       // Fallback to mock response if OpenAI fails (e.g., no API key)
       const mockResponse = `💡 **Mock Trading Tip**
@@ -697,7 +700,7 @@ export class StrategyFlowService {
 
 ⚠️ *This is a mock response - configure OpenAI API key for real AI tips*`;
       
-      console.log(`[Model Call] ${modelCall.name}: Using fallback response due to error`);
+      console.log(`📝 ${modelCall.name}: Using fallback response`);
       
       return mockResponse;
     }
@@ -722,29 +725,22 @@ export class StrategyFlowService {
   }
   
   private saveExecutionLog(executionId: number, log: FlowExecutionLog): void {
-    const fields: string[] = [];
-    const values: any[] = [];
-    
-    const fieldMap: Record<string, string> = {
-      executionId: 'execution_id',
-      stepType: 'step_type',
-      stepId: 'step_id',
-      input: 'input',
-      output: 'output',
-      error: 'error',
-      duration: 'duration'
-    };
-    
-    Object.entries(log).forEach(([key, value]) => {
-      const dbField = fieldMap[key] || key;
-      fields.push(`${dbField} = ?`);
-      values.push(value);
-    });
-    
-    if (fields.length > 0) {
-      values.push(executionId);
-      const query = `UPDATE flow_execution_logs SET ${fields.join(', ')} WHERE execution_id = ?`;
-      db.prepare(query).run(...values);
+    try {
+      db.prepare(`
+        INSERT INTO flow_execution_logs 
+        (execution_id, step_type, step_id, input, output, error, duration)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        executionId,
+        log.stepType,
+        log.stepId,
+        log.input ? JSON.stringify(log.input) : null,
+        log.output ? JSON.stringify(log.output) : null,
+        log.error || null,
+        log.duration
+      );
+    } catch (error) {
+      console.error('Failed to save execution log:', error);
     }
   }
 
@@ -867,12 +863,9 @@ export class StrategyFlowService {
     if (triggerNode.conditionVariable) {
       const conditionValue = variables[triggerNode.conditionVariable];
       if (!conditionValue) {
-        console.log(`[Strategy Trigger] ${triggerNode.name}: Condition not met (${triggerNode.conditionVariable} = ${conditionValue})`);
         return { triggered: false, reason: 'condition_not_met' };
       }
     }
-    
-    console.log(`[Strategy Trigger] ${triggerNode.name}: Triggering strategy ${triggerNode.targetStrategyId}`);
     
     try {
       // Import the strategy execution service to avoid circular dependencies
@@ -897,7 +890,7 @@ export class StrategyFlowService {
         
         if (targetResult.success) {
           strategyExecutionService.completeExecution(executionId);
-          console.log(`[Strategy Trigger] ${triggerNode.name}: Target strategy ${triggerNode.targetStrategyId} completed successfully`);
+          console.log(`🔗 Triggered strategy ${triggerNode.targetStrategyId} - completed`);
           
           return {
             triggered: true,
@@ -909,7 +902,7 @@ export class StrategyFlowService {
           };
         } else {
           strategyExecutionService.failExecution(executionId, targetResult.error);
-          console.error(`[Strategy Trigger] ${triggerNode.name}: Target strategy ${triggerNode.targetStrategyId} failed:`, targetResult.error);
+          console.error(`🔗 Triggered strategy ${triggerNode.targetStrategyId} - failed: ${targetResult.error}`);
           
           return {
             triggered: true,
@@ -922,22 +915,21 @@ export class StrategyFlowService {
         }
       } else {
         // Fire and forget - start the strategy execution but don't wait
-        console.log(`[Strategy Trigger] ${triggerNode.name}: Started strategy ${triggerNode.targetStrategyId} (fire and forget)`);
+        console.log(`🔗 Triggered strategy ${triggerNode.targetStrategyId} (background)`);
         
         // Execute in background (fire and forget)
         this.executeStrategyFlow(triggerNode.targetStrategyId, executionId)
           .then(result => {
             if (result.success) {
               strategyExecutionService.completeExecution(executionId);
-              console.log(`[Strategy Trigger] Background execution of strategy ${triggerNode.targetStrategyId} completed`);
             } else {
               strategyExecutionService.failExecution(executionId, result.error);
-              console.error(`[Strategy Trigger] Background execution of strategy ${triggerNode.targetStrategyId} failed:`, result.error);
+              console.error(`❌ Background strategy ${triggerNode.targetStrategyId} failed: ${result.error}`);
             }
           })
           .catch(error => {
             strategyExecutionService.failExecution(executionId, error.message);
-            console.error(`[Strategy Trigger] Background execution of strategy ${triggerNode.targetStrategyId} crashed:`, error);
+            console.error(`💥 Background strategy ${triggerNode.targetStrategyId} crashed:`, error);
           });
         
         return {
@@ -950,7 +942,7 @@ export class StrategyFlowService {
         };
       }
     } catch (error) {
-      console.error(`[Strategy Trigger] ${triggerNode.name}: Failed to trigger strategy ${triggerNode.targetStrategyId}:`, error);
+      console.error(`❌ Strategy trigger ${triggerNode.name} failed:`, error);
       
       return {
         triggered: false,
@@ -992,7 +984,7 @@ export class StrategyFlowService {
         message: finalMessage 
       };
     } catch (error) {
-      console.error(`Telegram message ${telegramNode.name} failed:`, error);
+      console.error(`❌ Telegram ${telegramNode.name} failed:`, error);
       throw error;
     }
   }
@@ -1036,6 +1028,17 @@ export class StrategyFlowService {
     
     // Otherwise, treat as variable name or literal value
     return variables[operand] !== undefined ? variables[operand] : operand;
+  }
+
+  private getStepEmoji(stepType: string): string {
+    switch (stepType) {
+      case 'api_call': return '🌐';
+      case 'model_call': return '🤖';
+      case 'condition_node': return '🔍';
+      case 'strategy_trigger_node': return '🔗';
+      case 'telegram_message_node': return '📤';
+      default: return '❓';
+    }
   }
 }
 

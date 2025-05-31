@@ -1,4 +1,4 @@
-import { cronToHuman, isValidCron, getCronDetails } from './cronUtils';
+import { cronToHuman, isValidCron } from './cronUtils';
 
 // Test cases for cronToHuman function
 const testCases = [
@@ -8,6 +8,13 @@ const testCases = [
   { cron: '*/30 * * * *', expected: 'Every 30 minutes' },
   { cron: '0 * * * *', expected: 'Every hour' },
   { cron: '0 */2 * * *', expected: 'Every 2 hours' },
+  
+  // 6-part cron expressions (with seconds)
+  { cron: '*/30 * * * * *', expected: 'Every 30 seconds' },
+  { cron: '*/5 * * * * *', expected: 'Every 5 seconds' },
+  { cron: '*/10 * * * * *', expected: 'Every 10 seconds' },
+  { cron: '0 */15 * * * *', expected: 'Every 15 minutes' },
+  { cron: '0 0 9 * * *', expected: 'Daily at 9:00 AM' },
   
   // Daily patterns
   { cron: '0 9 * * *', expected: 'Daily at 9:00 AM' },
@@ -33,6 +40,7 @@ const testCases = [
   { cron: '', expected: 'Invalid schedule' },
   { cron: '0 9 * *', expected: '0 9 * *' }, // Not 5 parts
   { cron: 'invalid', expected: 'invalid' },
+  { cron: '0 9 * * * * *', expected: '0 9 * * * * *' }, // 7 parts - invalid
 ];
 
 // Run tests
@@ -52,9 +60,12 @@ console.log('=============================');
 const validCronTests = [
   { cron: '0 9 * * *', expected: true },
   { cron: '*/15 * * * *', expected: true },
-  { cron: '0 9 * *', expected: false }, // Missing parts
+  { cron: '*/30 * * * * *', expected: true },
+  { cron: '0 */15 * * * *', expected: true },
+  { cron: '0 9 * *', expected: false },
   { cron: '', expected: false },
   { cron: 'invalid', expected: false },
+  { cron: '0 9 * * * * *', expected: false },
 ];
 
 validCronTests.forEach(({ cron, expected }) => {
@@ -63,4 +74,4 @@ validCronTests.forEach(({ cron, expected }) => {
   console.log(`${status} "${cron}" → ${result} (expected: ${expected})`);
 });
 
-export {}; // Make this a module 
+export { }; // Make this a module 

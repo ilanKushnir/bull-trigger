@@ -8,23 +8,39 @@ export function cronToHuman(cronExpression: string): string {
     return 'Invalid schedule';
   }
 
-  const parts = cronExpression.trim().split(/\s+/);
-  console.log('cronToHuman: Parsing cron:', cronExpression, 'Parts:', parts);
-  
-  // Standard cron has 5 parts: minute hour day month weekday
-  if (parts.length !== 5) {
-    console.log('cronToHuman: Invalid part count:', parts.length);
-    return cronExpression; // Return original if not standard format
-  }
-
-  const [minute, hour, day, month, weekday] = parts;
-  console.log('cronToHuman: Fields:', { minute, hour, day, month, weekday });
-
   // Helper function to parse number or range
   const parseNumber = (value: string): number | null => {
     const num = parseInt(value);
     return isNaN(num) ? null : num;
   };
+
+  const parts = cronExpression.trim().split(/\s+/);
+  console.log('cronToHuman: Parsing cron:', cronExpression, 'Parts:', parts);
+  
+  let minute, hour, day, month, weekday;
+  
+  // Handle both 5-part (standard) and 6-part (with seconds) cron expressions
+  if (parts.length === 5) {
+    // Standard cron: minute hour day month weekday
+    [minute, hour, day, month, weekday] = parts;
+  } else if (parts.length === 6) {
+    // Extended cron with seconds: second minute hour day month weekday
+    const [second, ...rest] = parts;
+    [minute, hour, day, month, weekday] = rest;
+    
+    // Handle second-based patterns
+    if (second.startsWith('*/') && minute === '*' && hour === '*' && day === '*' && month === '*' && weekday === '*') {
+      const interval = parseNumber(second.substring(2));
+      if (interval) {
+        return `Every ${interval} second${interval > 1 ? 's' : ''}`;
+      }
+    }
+  } else {
+    console.log('cronToHuman: Invalid part count:', parts.length);
+    return cronExpression; // Return original if not standard format
+  }
+
+  console.log('cronToHuman: Fields:', { minute, hour, day, month, weekday });
 
   // Helper function to format time
   const formatTime = (hour: string, minute: string): string => {
@@ -131,7 +147,7 @@ export function isValidCron(cronExpression: string): boolean {
   }
 
   const parts = cronExpression.trim().split(/\s+/);
-  return parts.length === 5;
+  return parts.length === 5 || parts.length === 6;
 }
 
 /**
