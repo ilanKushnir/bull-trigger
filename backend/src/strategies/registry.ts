@@ -151,8 +151,8 @@ export function ensureDefaultStrategies() {
   sqlite.prepare('DELETE FROM strategies').run();
   sqlite.prepare('DELETE FROM api_calls').run();
   sqlite.prepare('DELETE FROM model_calls').run();
-  sqlite.prepare('DELETE FROM telegram_message_nodes').run();
-  sqlite.prepare('DELETE FROM strategy_trigger_nodes').run();
+  sqlite.prepare('DELETE FROM strategy_nodes_telegram').run();
+  sqlite.prepare('DELETE FROM strategy_nodes_triggers').run();
   
   // Strategy 1: BTC Market Analysis
   const btcAnalysisResult = sqlite.prepare('INSERT INTO strategies (name, description, enabled, cron) VALUES (?, ?, ?, ?)').run(
@@ -213,7 +213,7 @@ export function ensureDefaultStrategies() {
   );
   
   // Telegram Message: Send Analysis
-  sqlite.prepare(`INSERT INTO telegram_message_nodes (strategy_id, name, chat_id, message_template, include_api_data, message_type, parse_mode, order_index, enabled) 
+  sqlite.prepare(`INSERT INTO strategy_nodes_telegram (strategy_id, name, chat_id, message_template, include_api_data, message_type, parse_mode, order_index, enabled) 
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     btcStrategyId,
     'Send Market Analysis',
@@ -227,7 +227,7 @@ export function ensureDefaultStrategies() {
   );
   
   // Strategy Trigger: Trigger Crypto Tip
-  sqlite.prepare(`INSERT INTO strategy_trigger_nodes (strategy_id, name, target_strategy_id, condition_variable, wait_for_completion, order_index, enabled) 
+  sqlite.prepare(`INSERT INTO strategy_nodes_triggers (strategy_id, name, target_strategy_id, condition_variable, wait_for_completion, order_index, enabled) 
     VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
     btcStrategyId,
     'Trigger Crypto Tip',
@@ -253,7 +253,7 @@ export function ensureDefaultStrategies() {
   );
   
   // Telegram Message: Send Crypto Tip
-  sqlite.prepare(`INSERT INTO telegram_message_nodes (strategy_id, name, chat_id, message_template, include_api_data, message_type, parse_mode, order_index, enabled) 
+  sqlite.prepare(`INSERT INTO strategy_nodes_telegram (strategy_id, name, chat_id, message_template, include_api_data, message_type, parse_mode, order_index, enabled) 
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     tipStrategyId,
     'Send Crypto Tip',

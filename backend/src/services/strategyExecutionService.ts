@@ -31,11 +31,27 @@ export interface StrategyMetrics {
 }
 
 export class StrategyExecutionService {
+  private websocketService: any = null;
+
+  constructor() {
+    // Import websocket service dynamically to avoid circular dependencies
+    this.initWebSocket();
+  }
+
+  private async initWebSocket() {
+    try {
+      const { getWebSocketService } = await import('../websocket/websocketService');
+      this.websocketService = getWebSocketService();
+    } catch (error) {
+      console.warn('WebSocket service not available for strategy execution broadcasts');
+    }
+  }
+
   // Start tracking a strategy execution
   startExecution(strategyId: number, executionType: 'cron' | 'manual'): number {
     const result: any = db.prepare(`
-      INSERT INTO strategy_executions (strategy_id, status, execution_type)
-      VALUES (?, 'running', ?)
+      INSERT INTO strategy_executions (strategy_id, execution_type, status)
+      VALUES (?, ?, 'running')
     `).run(strategyId, executionType);
     
     return result.lastInsertRowid;
@@ -48,6 +64,19 @@ export class StrategyExecutionService {
       SET status = 'success', completed_at = CURRENT_TIMESTAMP 
       WHERE id = ?
     `).run(executionId);
+    
+    // Get the strategy ID and broadcast updated metrics
+    const execution = db.prepare(`
+      SELECT strategy_id FROM strategy_executions WHERE id = ?
+    `).get(executionId) as { strategy_id: number } | undefined;
+    
+    if (execution && this.websocketService) {
+      const metrics = this.getStrategyMetrics(execution.strategy_id);
+      this.websocketService.broadcastStrategyUpdate({
+        strategyId: execution.strategy_id,
+        metrics: metrics
+      });
+    }
   }
 
   // Mark execution as failed
@@ -57,6 +86,19 @@ export class StrategyExecutionService {
       SET status = 'failed', completed_at = CURRENT_TIMESTAMP, error = ?
       WHERE id = ?
     `).run(error || null, executionId);
+    
+    // Get the strategy ID and broadcast updated metrics
+    const execution = db.prepare(`
+      SELECT strategy_id FROM strategy_executions WHERE id = ?
+    `).get(executionId) as { strategy_id: number } | undefined;
+    
+    if (execution && this.websocketService) {
+      const metrics = this.getStrategyMetrics(execution.strategy_id);
+      this.websocketService.broadcastStrategyUpdate({
+        strategyId: execution.strategy_id,
+        metrics: metrics
+      });
+    }
   }
 
   // Get metrics for a specific strategy
@@ -99,13 +141,29 @@ export class StrategyExecutionService {
       ? Math.round((successfulRuns.count / totalRuns.count) * 100)
       : 0;
 
+    // Convert the database timestamp to a proper ISO string
+    let formattedLastRun: string | undefined = undefined;
+    if (lastRun?.started_at) {
+      try {
+        // SQLite CURRENT_TIMESTAMP returns UTC time in format 'YYYY-MM-DD HH:MM:SS'
+        // We need to append 'Z' to make it a proper UTC ISO string
+        const utcTimestamp = lastRun.started_at.includes('T') ? 
+          lastRun.started_at : 
+          lastRun.started_at.replace(' ', 'T') + 'Z';
+        formattedLastRun = new Date(utcTimestamp).toISOString();
+      } catch (error) {
+        console.warn('Failed to parse timestamp:', lastRun.started_at, error);
+        formattedLastRun = lastRun.started_at;
+      }
+    }
+
     return {
       strategyId,
       totalRuns: totalRuns.count,
       successfulRuns: successfulRuns.count,
       failedRuns: failedRuns.count,
       successRate,
-      lastRun: lastRun?.started_at,
+      lastRun: formattedLastRun,
       avgExecutionTime: avgExecution?.avg_seconds ? Math.round(avgExecution.avg_seconds) : undefined
     };
   }

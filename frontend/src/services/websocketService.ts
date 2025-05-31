@@ -100,9 +100,16 @@ class ApiService {
   ): Promise<ApiResponse<T>> {
     try {
       const url = `${this.baseUrl}${endpoint}`;
+      
+      // Only set Content-Type header if there's a body
+      const headers: Record<string, string> = {};
+      if (options.body) {
+        headers['Content-Type'] = 'application/json';
+      }
+      
       const response = await fetch(url, {
         headers: {
-          'Content-Type': 'application/json',
+          ...headers,
           ...options.headers,
         },
         ...options,
@@ -158,6 +165,12 @@ class ApiService {
     return this.request<{ id: number }>('/api/strategies', {
       method: 'POST',
       body: JSON.stringify(strategy),
+    });
+  }
+
+  async deleteStrategy(id: number): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>(`/api/strategies/${id}`, {
+      method: 'DELETE',
     });
   }
 
@@ -636,6 +649,7 @@ export function useApi() {
     updateStrategy: apiService.updateStrategy.bind(apiService),
     runStrategy: apiService.runStrategy.bind(apiService),
     createStrategy: apiService.createStrategy.bind(apiService),
+    deleteStrategy: apiService.deleteStrategy.bind(apiService),
     getStrategyMetrics: apiService.getStrategyMetrics.bind(apiService),
     getStrategyMetricsById: apiService.getStrategyMetricsById.bind(apiService),
     getStrategyExecutions: apiService.getStrategyExecutions.bind(apiService),

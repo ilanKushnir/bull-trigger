@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { useEffect, useState } from 'react';
+import PriceChart from '../components/charts/PriceChart';
+import TradingChart from '../components/charts/TradingChart';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
-import { useWebSocket, useApi, SystemHealth, TokenUsage, LiveSignal, Alert } from '../services/websocketService';
-import TradingChart from '../components/charts/TradingChart';
-import PriceChart from '../components/charts/PriceChart';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Alert, LiveSignal, SystemHealth, TokenUsage, useApi, useWebSocket } from '../services/websocketService';
 
 // Icons as simple components
 const DatabaseIcon = () => <span className="text-lg">🗄️</span>;
@@ -274,7 +274,7 @@ export default function Home() {
           <CardContent>
             <div className="flex items-center space-x-2">
               <Badge variant={getStatusColor(systemStats?.status || 'healthy') as any}>
-                {systemStats?.status.toUpperCase() || 'Healthy'}
+                {systemStats?.status?.toUpperCase() || 'HEALTHY'}
               </Badge>
               <span className="text-2xl font-bold text-white">
                 {systemStats?.isConnected ? '🟢' : '🔴'}
@@ -422,7 +422,7 @@ export default function Home() {
             {alerts.map((alert, index) => (
               <div key={index} className="flex items-center space-x-3 p-2 bg-gray-800 rounded">
                 <Badge variant={alert.type === 'error' ? 'error' : alert.type === 'warning' ? 'warning' : 'info'}>
-                  {alert.type.toUpperCase()}
+                  {alert.type?.toUpperCase() || 'INFO'}
                 </Badge>
                 <span className="text-white flex-1">{alert.message}</span>
                 <span className="text-xs text-gray-500">

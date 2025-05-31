@@ -271,6 +271,30 @@ export const buildServer = async () => {
     return { id: res.lastInsertRowid };
   });
 
+  fastify.delete<{ Params: { id: string } }>('/api/strategies/:id', async (req) => {
+    const strategyId = Number(req.params.id);
+    
+    try {
+      // Delete all related data first
+      sqliteDb.prepare('DELETE FROM api_calls WHERE strategy_id = ?').run(strategyId);
+      sqliteDb.prepare('DELETE FROM model_calls WHERE strategy_id = ?').run(strategyId);
+      sqliteDb.prepare('DELETE FROM strategy_nodes_conditions WHERE strategy_id = ?').run(strategyId);
+      sqliteDb.prepare('DELETE FROM strategy_nodes_triggers WHERE strategy_id = ?').run(strategyId);
+      sqliteDb.prepare('DELETE FROM strategy_nodes_telegram WHERE strategy_id = ?').run(strategyId);
+      
+      // Delete the strategy itself
+      sqliteDb.prepare('DELETE FROM strategies WHERE id = ?').run(strategyId);
+      
+      // Refresh the strategy registry to remove the deleted strategy from scheduler
+      loadStrategies();
+      
+      return { ok: true };
+    } catch (error) {
+      console.error('Failed to delete strategy:', error);
+      return { error: 'Failed to delete strategy' };
+    }
+  });
+
   fastify.get<{ Params: { id: string } }>('/api/strategies/:id/flow', async (req) => {
     const strategyId = Number(req.params.id);
     return strategyFlowService.getStrategyFlow(strategyId);
@@ -564,6 +588,61 @@ export const buildServer = async () => {
     const telegramNodeId = Number(req.params.telegramNodeId);
     strategyFlowService.deleteTelegramMessageNode(telegramNodeId);
     return { ok: true };
+  });
+
+  // ===== FLOW EDGES ENDPOINTS =====
+  
+  // Get flow edges for a strategy
+  fastify.get('/api/strategies/:strategyId/edges', async (request, reply) => {
+    const { strategyId } = request.params as { strategyId: string };
+    
+    try {
+      const edges = sqliteDb.prepare(`
+        SELECT id, source_node_id as source, target_node_id as target, 
+               source_handle as sourceHandle, target_handle as targetHandle
+        FROM flow_edges 
+        WHERE strategy_id = ?
+        ORDER BY created_at ASC
+      `).all(strategyId);
+      
+      reply.send({ success: true, edges });
+    } catch (error) {
+      console.error('Failed to get flow edges:', error);
+      reply.status(500).send({ success: false, error: 'Failed to get flow edges' });
+    }
+  });
+
+  // Create a new flow edge
+  fastify.post('/api/strategies/:strategyId/edges', async (request, reply) => {
+    const { strategyId } = request.params as { strategyId: string };
+    const { sourceNodeId, targetNodeId, sourceHandle, targetHandle } = request.body as any;
+    
+    try {
+      const edgeId = `${sourceNodeId}-${targetNodeId}`;
+      
+      sqliteDb.prepare(`
+        INSERT OR REPLACE INTO flow_edges (id, strategy_id, source_node_id, target_node_id, source_handle, target_handle)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(edgeId, strategyId, sourceNodeId, targetNodeId, sourceHandle || 'default', targetHandle || 'default');
+      
+      reply.send({ success: true, edgeId });
+    } catch (error) {
+      console.error('Failed to create flow edge:', error);
+      reply.status(500).send({ success: false, error: 'Failed to create flow edge' });
+    }
+  });
+
+  // Delete a flow edge
+  fastify.delete('/api/strategies/:strategyId/edges/:edgeId', async (request, reply) => {
+    const { strategyId, edgeId } = request.params as { strategyId: string; edgeId: string };
+    
+    try {
+      sqliteDb.prepare('DELETE FROM flow_edges WHERE id = ? AND strategy_id = ?').run(edgeId, strategyId);
+      reply.send({ success: true });
+    } catch (error) {
+      console.error('Failed to delete flow edge:', error);
+      reply.status(500).send({ success: false, error: 'Failed to delete flow edge' });
+    }
   });
 
   return fastify;

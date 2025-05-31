@@ -101,17 +101,20 @@ export class StrategyFlowService {
   
   async createApiCall(strategyId: number, apiCallData: any): Promise<number> {
     const query = `
-      INSERT INTO api_calls (strategy_id, name, url, method, headers, json_path, order_index)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO api_calls (strategy_id, name, url, method, headers, body, json_path, output_variable, order_index, enabled)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     const values = [
       strategyId,
       apiCallData.name,
       apiCallData.url,
       apiCallData.method,
-      JSON.stringify(apiCallData.headers || {}),
-      apiCallData.jsonPath,
-      apiCallData.orderIndex || 0
+      apiCallData.headers ? JSON.stringify(apiCallData.headers) : null,
+      apiCallData.body || null,
+      apiCallData.jsonPath || null,
+      apiCallData.outputVariable,
+      apiCallData.orderIndex || 0,
+      apiCallData.enabled ? 1 : 0
     ];
     
     try {
@@ -124,30 +127,54 @@ export class StrategyFlowService {
   }
 
   async updateApiCall(id: number, apiCallData: any): Promise<void> {
-    const fields: string[] = [];
-    const values: any[] = [];
-    
-    const fieldMap: Record<string, string> = {
-      name: 'name',
-      url: 'url',
-      method: 'method',
-      headers: 'headers',
-      jsonPath: 'json_path',
-      orderIndex: 'order_index'
-    };
-    
-    Object.entries(apiCallData).forEach(([key, value]) => {
-      if (key !== 'id') {
-        const dbField = fieldMap[key] || key;
-        fields.push(`${dbField} = ?`);
-        values.push(value);
+    try {
+      console.log('🔧 updateApiCall called with:', { id, apiCallData });
+      
+      const fields: string[] = [];
+      const values: any[] = [];
+      
+      const fieldMap: Record<string, string> = {
+        strategyId: 'strategy_id',
+        name: 'name',
+        url: 'url',
+        method: 'method',
+        headers: 'headers',
+        body: 'body',
+        jsonPath: 'json_path',
+        outputVariable: 'output_variable',
+        orderIndex: 'order_index',
+        enabled: 'enabled'
+      };
+      
+      Object.entries(apiCallData).forEach(([key, value]) => {
+        // Skip fields that don't exist in the database or are meta fields
+        if (key !== 'id' && key !== 'type' && fieldMap[key]) {
+          const dbField = fieldMap[key];
+          fields.push(`${dbField} = ?`);
+          // Convert boolean values to integers for SQLite
+          if (key === 'enabled') {
+            values.push(value ? 1 : 0);
+          } else if (key === 'headers' && value) {
+            values.push(typeof value === 'string' ? value : JSON.stringify(value));
+          } else {
+            values.push(value);
+          }
+        }
+      });
+      
+      if (fields.length > 0) {
+        values.push(id);
+        const query = `UPDATE api_calls SET ${fields.join(', ')} WHERE id = ?`;
+        console.log('🔧 Executing query:', query, 'with values:', values);
+        db.prepare(query).run(...values);
+        console.log('✅ API call updated successfully');
+      } else {
+        console.log('⚠️ No valid fields to update');
       }
-    });
-    
-    if (fields.length > 0) {
-      values.push(id);
-      const query = `UPDATE api_calls SET ${fields.join(', ')} WHERE id = ?`;
-      db.prepare(query).run(...values);
+    } catch (error) {
+      console.error('❌ Error in updateApiCall:', error);
+      console.error('❌ Input data:', { id, apiCallData });
+      throw error;
     }
   }
 
@@ -184,15 +211,19 @@ export class StrategyFlowService {
   
   async createModelCall(strategyId: number, modelCallData: any): Promise<number> {
     const query = `
-      INSERT INTO model_calls (strategy_id, name, prompt_template, model_tier, order_index)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO model_calls (strategy_id, name, model_tier, system_prompt, user_prompt, include_api_data, output_variable, order_index, enabled)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     const values = [
       strategyId,
       modelCallData.name,
-      modelCallData.promptTemplate,
-      modelCallData.modelTier,
-      modelCallData.orderIndex || 0
+      modelCallData.modelTier || 'cheap',
+      modelCallData.systemPrompt || null,
+      modelCallData.userPrompt || '',
+      modelCallData.includeApiData ? 1 : 0,
+      modelCallData.outputVariable,
+      modelCallData.orderIndex || 0,
+      modelCallData.enabled ? 1 : 0
     ];
     
     try {
@@ -205,28 +236,49 @@ export class StrategyFlowService {
   }
 
   async updateModelCall(id: number, modelCallData: any): Promise<void> {
-    const fields: string[] = [];
-    const values: any[] = [];
-    
-    const fieldMap: Record<string, string> = {
-      name: 'name',
-      promptTemplate: 'prompt_template',
-      modelTier: 'model_tier',
-      orderIndex: 'order_index'
-    };
-    
-    Object.entries(modelCallData).forEach(([key, value]) => {
-      if (key !== 'id') {
-        const dbField = fieldMap[key] || key;
-        fields.push(`${dbField} = ?`);
-        values.push(value);
+    try {
+      console.log('🔧 updateModelCall called with:', { id, modelCallData });
+      
+      const fields: string[] = [];
+      const values: any[] = [];
+      
+      const fieldMap: Record<string, string> = {
+        name: 'name',
+        modelTier: 'model_tier',
+        systemPrompt: 'system_prompt',
+        userPrompt: 'user_prompt',
+        includeApiData: 'include_api_data',
+        outputVariable: 'output_variable',
+        orderIndex: 'order_index',
+        enabled: 'enabled'
+      };
+      
+      Object.entries(modelCallData).forEach(([key, value]) => {
+        if (key !== 'id' && key !== 'type' && fieldMap[key]) {
+          const dbField = fieldMap[key];
+          fields.push(`${dbField} = ?`);
+          // Convert boolean values to integers for SQLite
+          if (key === 'includeApiData' || key === 'enabled') {
+            values.push(value ? 1 : 0);
+          } else {
+            values.push(value);
+          }
+        }
+      });
+      
+      if (fields.length > 0) {
+        values.push(id);
+        const query = `UPDATE model_calls SET ${fields.join(', ')} WHERE id = ?`;
+        console.log('🔧 Executing query:', query, 'with values:', values);
+        db.prepare(query).run(...values);
+        console.log('✅ Model call updated successfully');
+      } else {
+        console.log('⚠️ No valid fields to update');
       }
-    });
-    
-    if (fields.length > 0) {
-      values.push(id);
-      const query = `UPDATE model_calls SET ${fields.join(', ')} WHERE id = ?`;
-      db.prepare(query).run(...values);
+    } catch (error) {
+      console.error('❌ Error in updateModelCall:', error);
+      console.error('❌ Input data:', { id, modelCallData });
+      throw error;
     }
   }
 
@@ -263,7 +315,7 @@ export class StrategyFlowService {
   
   createConditionNode(conditionNode: Omit<ConditionNode, 'id'>): number {
     const result: any = db.prepare(`
-      INSERT INTO condition_nodes 
+      INSERT INTO strategy_nodes_conditions 
       (strategy_id, name, condition_type, left_operand, operator, right_operand, true_output_variable, false_output_variable, order_index, enabled)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -283,39 +335,51 @@ export class StrategyFlowService {
   }
 
   updateConditionNode(id: number, updates: Partial<ConditionNode>): void {
-    const fields: string[] = [];
-    const values: any[] = [];
-    
-    const fieldMap: Record<string, string> = {
-      strategyId: 'strategy_id',
-      conditionType: 'condition_type',
-      leftOperand: 'left_operand',
-      rightOperand: 'right_operand',
-      trueOutputVariable: 'true_output_variable',
-      falseOutputVariable: 'false_output_variable',
-      orderIndex: 'order_index',
-      name: 'name',
-      operator: 'operator',
-      enabled: 'enabled'
-    };
-    
-    Object.entries(updates).forEach(([key, value]) => {
-      if (key !== 'id') {
-        const dbField = fieldMap[key] || key;
-        fields.push(`${dbField} = ?`);
-        values.push(key === 'enabled' ? (value ? 1 : 0) : value);
+    try {
+      console.log('🔧 updateConditionNode called with:', { id, updates });
+      
+      const fields: string[] = [];
+      const values: any[] = [];
+      
+      const fieldMap: Record<string, string> = {
+        strategyId: 'strategy_id',
+        conditionType: 'condition_type',
+        leftOperand: 'left_operand',
+        rightOperand: 'right_operand',
+        trueOutputVariable: 'true_output_variable',
+        falseOutputVariable: 'false_output_variable',
+        orderIndex: 'order_index',
+        name: 'name',
+        operator: 'operator',
+        enabled: 'enabled'
+      };
+      
+      Object.entries(updates).forEach(([key, value]) => {
+        if (key !== 'id' && key !== 'type' && fieldMap[key]) {
+          const dbField = fieldMap[key];
+          fields.push(`${dbField} = ?`);
+          values.push(key === 'enabled' ? (value ? 1 : 0) : value);
+        }
+      });
+      
+      if (fields.length > 0) {
+        values.push(id);
+        const query = `UPDATE strategy_nodes_conditions SET ${fields.join(', ')} WHERE id = ?`;
+        console.log('🔧 Executing query:', query, 'with values:', values);
+        db.prepare(query).run(...values);
+        console.log('✅ Condition node updated successfully');
+      } else {
+        console.log('⚠️ No valid fields to update');
       }
-    });
-    
-    if (fields.length > 0) {
-      values.push(id);
-      const query = `UPDATE condition_nodes SET ${fields.join(', ')} WHERE id = ?`;
-      db.prepare(query).run(...values);
+    } catch (error) {
+      console.error('❌ Error in updateConditionNode:', error);
+      console.error('❌ Input data:', { id, updates });
+      throw error;
     }
   }
 
   deleteConditionNode(id: number): void {
-    db.prepare('DELETE FROM condition_nodes WHERE id = ?').run(id);
+    db.prepare('DELETE FROM strategy_nodes_conditions WHERE id = ?').run(id);
   }
 
   getConditionNodesByStrategy(strategyId: number): ConditionNode[] {
@@ -332,7 +396,7 @@ export class StrategyFlowService {
         false_output_variable as falseOutputVariable, 
         order_index as orderIndex, 
         enabled 
-      FROM condition_nodes 
+      FROM strategy_nodes_conditions 
       WHERE strategy_id = ? 
       ORDER BY order_index ASC
     `).all(strategyId) as any[];
@@ -347,7 +411,7 @@ export class StrategyFlowService {
   
   createStrategyTriggerNode(triggerNode: Omit<StrategyTriggerNode, 'id'>): number {
     const result: any = db.prepare(`
-      INSERT INTO strategy_trigger_nodes 
+      INSERT INTO strategy_nodes_triggers 
       (strategy_id, name, target_strategy_id, condition_variable, pass_variables, wait_for_completion, output_variable, order_index, enabled)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -397,13 +461,13 @@ export class StrategyFlowService {
     
     if (fields.length > 0) {
       values.push(id);
-      const query = `UPDATE strategy_trigger_nodes SET ${fields.join(', ')} WHERE id = ?`;
+      const query = `UPDATE strategy_nodes_triggers SET ${fields.join(', ')} WHERE id = ?`;
       db.prepare(query).run(...values);
     }
   }
 
   deleteStrategyTriggerNode(id: number): void {
-    db.prepare('DELETE FROM strategy_trigger_nodes WHERE id = ?').run(id);
+    db.prepare('DELETE FROM strategy_nodes_triggers WHERE id = ?').run(id);
   }
 
   getStrategyTriggerNodesByStrategy(strategyId: number): StrategyTriggerNode[] {
@@ -419,7 +483,7 @@ export class StrategyFlowService {
         output_variable as outputVariable, 
         order_index as orderIndex, 
         enabled 
-      FROM strategy_trigger_nodes 
+      FROM strategy_nodes_triggers 
       WHERE strategy_id = ? 
       ORDER BY order_index ASC
     `).all(strategyId) as any[];
@@ -436,7 +500,7 @@ export class StrategyFlowService {
   
   createTelegramMessageNode(telegramNode: Omit<TelegramMessageNode, 'id'>): number {
     const result: any = db.prepare(`
-      INSERT INTO telegram_message_nodes 
+      INSERT INTO strategy_nodes_telegram 
       (strategy_id, name, chat_id, message_template, include_api_data, only_if_variable, message_type, parse_mode, order_index, enabled)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -482,13 +546,13 @@ export class StrategyFlowService {
     
     if (fields.length > 0) {
       values.push(id);
-      const query = `UPDATE telegram_message_nodes SET ${fields.join(', ')} WHERE id = ?`;
+      const query = `UPDATE strategy_nodes_telegram SET ${fields.join(', ')} WHERE id = ?`;
       db.prepare(query).run(...values);
     }
   }
 
   deleteTelegramMessageNode(id: number): void {
-    db.prepare('DELETE FROM telegram_message_nodes WHERE id = ?').run(id);
+    db.prepare('DELETE FROM strategy_nodes_telegram WHERE id = ?').run(id);
   }
 
   getTelegramMessageNodesByStrategy(strategyId: number): TelegramMessageNode[] {
@@ -505,7 +569,7 @@ export class StrategyFlowService {
         parse_mode as parseMode, 
         order_index as orderIndex, 
         enabled 
-      FROM telegram_message_nodes 
+      FROM strategy_nodes_telegram 
       WHERE strategy_id = ? 
       ORDER BY order_index ASC
     `).all(strategyId) as any[];

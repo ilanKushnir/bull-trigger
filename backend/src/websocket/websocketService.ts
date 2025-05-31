@@ -157,7 +157,7 @@ class WebSocketService {
   }
 
   public broadcastStrategyUpdate(strategy: any) {
-    this.io.to('strategies').emit('strategies:update', strategy);
+    this.io.to('strategies').emit('strategy:update', strategy);
   }
 
   public broadcastHealthUpdate() {

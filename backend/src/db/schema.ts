@@ -1,5 +1,5 @@
-import { sqliteTable, integer, text } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
+import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 export const migrations = sqliteTable('_migrations', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -43,20 +43,6 @@ export const messages = sqliteTable('messages', {
   reaction: text('reaction')
 });
 
-export const strategyCalls = sqliteTable('strategy_calls', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  strategyId: integer('strategy_id').notNull(),
-  orderIdx: integer('order_idx').notNull(),
-  type: text('type').notNull(),
-  configJson: text('config_json').notNull()
-});
-
-export const strategyEdges = sqliteTable('strategy_edges', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  srcCallId: integer('src_call_id').notNull(),
-  dstStrategyId: integer('dst_strategy_id').notNull()
-});
-
 export const strategyExecutions = sqliteTable('strategy_executions', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   strategyId: integer('strategy_id').notNull(),
@@ -97,7 +83,7 @@ export const modelCalls = sqliteTable('model_calls', {
 export const flowExecutionLogs = sqliteTable('flow_execution_logs', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   executionId: integer('execution_id').notNull(),
-  stepType: text('step_type').notNull(), // 'api_call' or 'model_call'
+  stepType: text('step_type').notNull(), // 'api_call', 'model_call', 'condition_node', 'strategy_trigger_node', 'telegram_message_node'
   stepId: integer('step_id').notNull(),
   input: text('input'), // JSON string of input data
   output: text('output'), // JSON string of output data
@@ -106,7 +92,7 @@ export const flowExecutionLogs = sqliteTable('flow_execution_logs', {
   timestamp: text('timestamp').default(sql`CURRENT_TIMESTAMP`).notNull()
 });
 
-export const conditionNodes = sqliteTable('condition_nodes', {
+export const strategyNodesConditions = sqliteTable('strategy_nodes_conditions', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   strategyId: integer('strategy_id').notNull(),
   name: text('name').notNull(),
@@ -120,7 +106,7 @@ export const conditionNodes = sqliteTable('condition_nodes', {
   enabled: integer('enabled', { mode: 'boolean' }).default(true).notNull()
 });
 
-export const strategyTriggerNodes = sqliteTable('strategy_trigger_nodes', {
+export const strategyNodesTriggers = sqliteTable('strategy_nodes_triggers', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   strategyId: integer('strategy_id').notNull(),
   name: text('name').notNull(),
@@ -133,7 +119,7 @@ export const strategyTriggerNodes = sqliteTable('strategy_trigger_nodes', {
   enabled: integer('enabled', { mode: 'boolean' }).default(true).notNull()
 });
 
-export const telegramMessageNodes = sqliteTable('telegram_message_nodes', {
+export const strategyNodesTelegram = sqliteTable('strategy_nodes_telegram', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   strategyId: integer('strategy_id').notNull(),
   name: text('name').notNull(),

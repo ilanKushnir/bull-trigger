@@ -1,32 +1,32 @@
 import {
-    ArrowPathIcon,
-    CpuChipIcon as BrainIcon,
-    ChatBubbleLeftIcon,
-    CheckIcon,
-    PencilIcon as EditIcon,
-    GlobeAltIcon as GlobeIcon,
-    InformationCircleIcon,
-    PlayIcon,
-    PlusIcon,
-    BeakerIcon as TestTubeIcon,
-    TrashIcon,
-    XMarkIcon
+  ArrowPathIcon,
+  CpuChipIcon as BrainIcon,
+  ChatBubbleLeftIcon,
+  CheckIcon,
+  PencilIcon as EditIcon,
+  GlobeAltIcon as GlobeIcon,
+  InformationCircleIcon,
+  PlayIcon,
+  PlusIcon,
+  BeakerIcon as TestTubeIcon,
+  TrashIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 import { useCallback, useEffect, useState } from 'react';
 import ReactFlow, {
-    addEdge,
-    Background,
-    BackgroundVariant,
-    Connection,
-    ConnectionLineType,
-    Controls,
-    Edge,
-    Handle,
-    Node,
-    NodeTypes,
-    Position,
-    useEdgesState,
-    useNodesState
+  addEdge,
+  Background,
+  BackgroundVariant,
+  Connection,
+  ConnectionLineType,
+  Controls,
+  Edge,
+  Handle,
+  Node,
+  NodeTypes,
+  Position,
+  useEdgesState,
+  useNodesState
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Strategy, useApi } from '../services/websocketService';
@@ -330,6 +330,7 @@ export default function StrategyFlowEditor({ strategyId, onClose, onRefetch }: S
   const [strategyTriggerNodes, setStrategyTriggerNodes] = useState<StrategyTriggerNode[]>([]);
   const [telegramMessageNodes, setTelegramMessageNodes] = useState<TelegramMessageNode[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedTab, setSelectedTab] = useState<'flow' | 'api' | 'model' | 'condition' | 'trigger' | 'telegram' | 'settings'>('flow');
   const [editingApiCall, setEditingApiCall] = useState<ApiCall | null>(null);
   const [editingModelCall, setEditingModelCall] = useState<ModelCall | null>(null);
   const [editingConditionNode, setEditingConditionNode] = useState<ConditionNode | null>(null);
@@ -344,20 +345,6 @@ export default function StrategyFlowEditor({ strategyId, onClose, onRefetch }: S
   const [availableStrategies, setAvailableStrategies] = useState<Strategy[]>([]);
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
   
-  // Track edge changes for save button
-  const [edgeChangeFlag, setEdgeChangeFlag] = useState(false);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  
-  // Track deleted items for draft mode
-  const [deletedApiCalls, setDeletedApiCalls] = useState<number[]>([]);
-  const [deletedModelCalls, setDeletedModelCalls] = useState<number[]>([]);
-  const [deletedConditionNodes, setDeletedConditionNodes] = useState<number[]>([]);
-  const [deletedStrategyTriggerNodes, setDeletedStrategyTriggerNodes] = useState<number[]>([]);
-  const [deletedTelegramMessageNodes, setDeletedTelegramMessageNodes] = useState<number[]>([]);
-  
-  // Track user-created edges to preserve them during flow updates
-  const [userCreatedEdges, setUserCreatedEdges] = useState<Edge[]>([]);
-
   // React Flow states
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -368,26 +355,6 @@ export default function StrategyFlowEditor({ strategyId, onClose, onRefetch }: S
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
     [setEdges]
   );
-
-  // Track edge changes
-  const onConnectWithTracking = useCallback(
-    (params: Connection) => {
-      setEdges((eds) => addEdge(params, eds));
-      setEdgeChangeFlag(true); // Mark that edges have changed
-    },
-    [setEdges]
-  );
-
-  // Track edge changes (deletions)
-  const onEdgesChangeWrapper = useCallback((changes: any[]) => {
-    onEdgesChange(changes);
-    
-    // Check if any edges were removed
-    const hasRemovals = changes.some(change => change.type === 'remove');
-    if (hasRemovals) {
-      setEdgeChangeFlag(true); // Mark that edges have changed
-    }
-  }, [onEdgesChange]);
 
   // Calculate available variables from the flow
   const getAvailableVariables = useCallback(() => {
@@ -431,29 +398,6 @@ export default function StrategyFlowEditor({ strategyId, onClose, onRefetch }: S
   useEffect(() => {
     setAvailableVariables(getAvailableVariables());
   }, [getAvailableVariables]);
-
-  // Track changes for save button
-  useEffect(() => {
-    console.log('🔍 Checking for changes - edgeChangeFlag:', edgeChangeFlag);
-    
-    // Check if there are any deleted items
-    const hasDeletedItems = deletedApiCalls.length > 0 || 
-                           deletedModelCalls.length > 0 || 
-                           deletedConditionNodes.length > 0 || 
-                           deletedStrategyTriggerNodes.length > 0 || 
-                           deletedTelegramMessageNodes.length > 0;
-    
-    console.log('🔍 Has deleted items:', hasDeletedItems, {
-      apiCalls: deletedApiCalls.length,
-      modelCalls: deletedModelCalls.length,
-      conditionNodes: deletedConditionNodes.length,
-      strategyTriggerNodes: deletedStrategyTriggerNodes.length,
-      telegramMessageNodes: deletedTelegramMessageNodes.length
-    });
-    
-    const hasChanges = edgeChangeFlag || hasDeletedItems;
-    setHasUnsavedChanges(hasChanges);
-  }, [edgeChangeFlag, deletedApiCalls, deletedModelCalls, deletedConditionNodes, deletedStrategyTriggerNodes, deletedTelegramMessageNodes]);
 
   // Load available strategies
   const loadAvailableStrategies = async () => {
@@ -729,13 +673,6 @@ export default function StrategyFlowEditor({ strategyId, onClose, onRefetch }: S
       }
       
       console.log('🔗 === LOADING COMPLETE ===');
-      setEdgeChangeFlag(false); // Reset edge changes after loading
-      // Clear deleted items when loading fresh from database
-      setDeletedApiCalls([]);
-      setDeletedModelCalls([]);
-      setDeletedConditionNodes([]);
-      setDeletedStrategyTriggerNodes([]);
-      setDeletedTelegramMessageNodes([]);
     } catch (error) {
       console.error('🔗 Exception while loading strategy flow:', error);
     }
@@ -824,17 +761,17 @@ export default function StrategyFlowEditor({ strategyId, onClose, onRefetch }: S
   };
 
   const handleDeleteApiCall = async (id: number) => {
-    // Mark for deletion locally instead of calling API immediately
-    setDeletedApiCalls(prev => [...prev, id]);
-    // Remove from current local state
-    setApiCalls(prev => prev.filter(call => call.id !== id));
+    const result = await api.deleteApiCall(strategyId, id);
+    if (result.success) {
+      await loadStrategyFlow();
+    }
   };
 
   const handleDeleteModelCall = async (id: number) => {
-    // Mark for deletion locally instead of calling API immediately
-    setDeletedModelCalls(prev => [...prev, id]);
-    // Remove from current local state
-    setModelCalls(prev => prev.filter(call => call.id !== id));
+    const result = await api.deleteModelCall(strategyId, id);
+    if (result.success) {
+      await loadStrategyFlow();
+    }
   };
 
   const handleTestApiCall = async (apiCall: ApiCall) => {
@@ -883,265 +820,6 @@ export default function StrategyFlowEditor({ strategyId, onClose, onRefetch }: S
   const getNextOrderIndex = () => {
     const allSteps = [...apiCalls, ...modelCalls, ...conditionNodes, ...strategyTriggerNodes, ...telegramMessageNodes];
     return allSteps.length > 0 ? Math.max(...allSteps.map(s => s.orderIndex)) + 1 : 1;
-  };
-
-  // Calculate order index based on flow structure
-  const calculateOrderFromFlow = useCallback(() => {
-    const orderMap = new Map();
-    
-    // If no edges exist, maintain current order
-    if (edges.length === 0) {
-      // Just assign current order indexes
-      apiCalls.forEach(call => {
-        const nodeId = `api_call_${call.id}`;
-        orderMap.set(nodeId, call.orderIndex);
-      });
-      modelCalls.forEach(call => {
-        const nodeId = `model_call_${call.id}`;
-        orderMap.set(nodeId, call.orderIndex);
-      });
-      conditionNodes.forEach(node => {
-        const nodeId = `condition_node_${node.id}`;
-        orderMap.set(nodeId, node.orderIndex);
-      });
-      strategyTriggerNodes.forEach(node => {
-        const nodeId = `strategy_trigger_node_${node.id}`;
-        orderMap.set(nodeId, node.orderIndex);
-      });
-      telegramMessageNodes.forEach(node => {
-        const nodeId = `telegram_message_node_${node.id}`;
-        orderMap.set(nodeId, node.orderIndex);
-      });
-      return orderMap;
-    }
-    
-    // Build adjacency list from edges
-    const graph = new Map();
-    const incomingEdges = new Map();
-    
-    // Initialize all nodes
-    nodes.forEach(node => {
-      if (node.id !== 'start') {
-        graph.set(node.id, []);
-        incomingEdges.set(node.id, 0);
-      }
-    });
-    
-    // Build the graph from edges
-    edges.forEach(edge => {
-      const source = edge.source;
-      const target = edge.target;
-      
-      // Skip start node for order calculation
-      if (source === 'start') {
-        return;
-      }
-      
-      if (!graph.has(source)) graph.set(source, []);
-      if (!graph.has(target)) graph.set(target, []);
-      
-      graph.get(source)!.push(target);
-      incomingEdges.set(target, (incomingEdges.get(target) || 0) + 1);
-    });
-    
-    // Find nodes that connect from start
-    const startConnections: string[] = [];
-    edges.forEach(edge => {
-      if (edge.source === 'start') {
-        startConnections.push(edge.target);
-        incomingEdges.set(edge.target, 0); // Reset incoming count for start connections
-      }
-    });
-    
-    // If no start connections, use all nodes with no incoming edges
-    if (startConnections.length === 0) {
-      nodes.forEach(node => {
-        if (node.id !== 'start' && incomingEdges.get(node.id) === 0) {
-          startConnections.push(node.id);
-        }
-      });
-    }
-    
-    // Topological sort to assign order indexes
-    const queue = [...startConnections];
-    let currentOrder = 1;
-    const visited = new Set();
-    
-    // Process nodes level by level
-    while (queue.length > 0) {
-      const levelSize = queue.length;
-      const currentLevel: string[] = [];
-      
-      // Process all nodes at the current level
-      for (let i = 0; i < levelSize; i++) {
-        const nodeId = queue.shift()!;
-        if (visited.has(nodeId)) continue;
-        
-        visited.add(nodeId);
-        currentLevel.push(nodeId);
-        orderMap.set(nodeId, currentOrder);
-        
-        // Add next level nodes
-        const neighbors = graph.get(nodeId) || [];
-        neighbors.forEach((neighbor: string) => {
-          if (!visited.has(neighbor)) {
-            const newIncomingCount = incomingEdges.get(neighbor)! - 1;
-            incomingEdges.set(neighbor, newIncomingCount);
-            
-            if (newIncomingCount === 0) {
-              queue.push(neighbor);
-            }
-          }
-        });
-      }
-      
-      // Move to next order level if we processed any nodes
-      if (currentLevel.length > 0) {
-        currentOrder++;
-      }
-    }
-    
-    // Handle any remaining unconnected nodes
-    nodes.forEach(node => {
-      if (node.id !== 'start' && !orderMap.has(node.id)) {
-        orderMap.set(node.id, currentOrder);
-      }
-    });
-    
-    console.log('🔗 Calculated order map:', Object.fromEntries(orderMap));
-    return orderMap;
-  }, [nodes, edges, apiCalls, modelCalls, conditionNodes, strategyTriggerNodes, telegramMessageNodes]);
-
-  // Save flow changes
-  const saveFlowChanges = async () => {
-    console.log('💾 Saving flow changes...');
-    try {
-      const orderMap = calculateOrderFromFlow();
-      const savePromises: Promise<any>[] = [];
-      
-      // Process deletions first
-      console.log('🗑️ Processing deletions...');
-      
-      // Delete API calls
-      for (const id of deletedApiCalls) {
-        console.log('🗑️ Deleting API call:', id);
-        savePromises.push(api.deleteApiCall(strategyId, id));
-      }
-      
-      // Delete model calls
-      for (const id of deletedModelCalls) {
-        console.log('🗑️ Deleting model call:', id);
-        savePromises.push(api.deleteModelCall(strategyId, id));
-      }
-      
-      // Delete condition nodes
-      for (const id of deletedConditionNodes) {
-        console.log('🗑️ Deleting condition node:', id);
-        savePromises.push(api.deleteConditionNode(strategyId, id));
-      }
-      
-      // Delete strategy trigger nodes
-      for (const id of deletedStrategyTriggerNodes) {
-        console.log('🗑️ Deleting strategy trigger node:', id);
-        savePromises.push(api.deleteStrategyTriggerNode(strategyId, id));
-      }
-      
-      // Delete telegram message nodes
-      for (const id of deletedTelegramMessageNodes) {
-        console.log('🗑️ Deleting telegram message node:', id);
-        savePromises.push(api.deleteTelegramMessageNode(strategyId, id));
-      }
-      
-      // Update API calls with new order
-      apiCalls.forEach(apiCall => {
-        if (apiCall.id) {
-          const nodeId = `api_call_${apiCall.id}`;
-          const newOrder = orderMap.get(nodeId) || apiCall.orderIndex;
-          if (newOrder !== apiCall.orderIndex) {
-            const updatedApiCall = { ...apiCall, orderIndex: newOrder };
-            savePromises.push(api.updateApiCall(strategyId, apiCall.id, updatedApiCall));
-          }
-        }
-      });
-      
-      // Update model calls with new order
-      modelCalls.forEach(modelCall => {
-        if (modelCall.id) {
-          const nodeId = `model_call_${modelCall.id}`;
-          const newOrder = orderMap.get(nodeId) || modelCall.orderIndex;
-          if (newOrder !== modelCall.orderIndex) {
-            const updatedModelCall = { ...modelCall, orderIndex: newOrder };
-            savePromises.push(api.updateModelCall(strategyId, modelCall.id, updatedModelCall));
-          }
-        }
-      });
-      
-      // Update condition nodes with new order
-      conditionNodes.forEach(conditionNode => {
-        if (conditionNode.id) {
-          const nodeId = `condition_node_${conditionNode.id}`;
-          const newOrder = orderMap.get(nodeId) || conditionNode.orderIndex;
-          if (newOrder !== conditionNode.orderIndex) {
-            const updatedConditionNode = { ...conditionNode, orderIndex: newOrder };
-            savePromises.push(api.updateConditionNode(strategyId, conditionNode.id, updatedConditionNode));
-          }
-        }
-      });
-      
-      // Update strategy trigger nodes with new order
-      strategyTriggerNodes.forEach(triggerNode => {
-        if (triggerNode.id) {
-          const nodeId = `strategy_trigger_node_${triggerNode.id}`;
-          const newOrder = orderMap.get(nodeId) || triggerNode.orderIndex;
-          if (newOrder !== triggerNode.orderIndex) {
-            const updatedTriggerNode = { ...triggerNode, orderIndex: newOrder };
-            savePromises.push(api.updateStrategyTriggerNode(strategyId, triggerNode.id, updatedTriggerNode));
-          }
-        }
-      });
-      
-      // Update telegram message nodes with new order
-      telegramMessageNodes.forEach(telegramNode => {
-        if (telegramNode.id) {
-          const nodeId = `telegram_message_node_${telegramNode.id}`;
-          const newOrder = orderMap.get(nodeId) || telegramNode.orderIndex;
-          if (newOrder !== telegramNode.orderIndex) {
-            const updatedTelegramNode = { ...telegramNode, orderIndex: newOrder };
-            savePromises.push(api.updateTelegramMessageNode(strategyId, telegramNode.id, updatedTelegramNode));
-          }
-        }
-      });
-      
-      if (savePromises.length > 0) {
-        const totalDeletions = deletedApiCalls.length + deletedModelCalls.length + deletedConditionNodes.length + deletedStrategyTriggerNodes.length + deletedTelegramMessageNodes.length;
-        console.log(`💾 Processing ${savePromises.length} operations (${totalDeletions} deletions, ${savePromises.length - totalDeletions} updates)...`);
-        const results = await Promise.all(savePromises);
-        const failures = results.filter(result => !result.success);
-        
-        if (failures.length > 0) {
-          console.error('❌ Some operations failed:', failures);
-          alert(`Failed to process ${failures.length} operations. Check console for details.`);
-        } else {
-          console.log('✅ All flow changes saved successfully');
-          // Clear deleted items state
-          setDeletedApiCalls([]);
-          setDeletedModelCalls([]);
-          setDeletedConditionNodes([]);
-          setDeletedStrategyTriggerNodes([]);
-          setDeletedTelegramMessageNodes([]);
-          // Reload data to reflect the new order
-          await loadStrategyFlow();
-        }
-      } else {
-        console.log('✅ No changes to save');
-      }
-      
-      setEdgeChangeFlag(false);
-      setHasUnsavedChanges(false);
-    } catch (error) {
-      console.error('❌ Error saving flow changes:', error);
-      alert(`Error saving flow: ${error}`);
-    }
   };
 
   const renderFlowView = () => {
@@ -1240,65 +918,34 @@ export default function StrategyFlowEditor({ strategyId, onClose, onRefetch }: S
               <XMarkIcon className="w-4 h-4" />
               <span>End Node</span>
             </Button>
+            <Button 
+              onClick={handleExecuteStrategy} 
+              disabled={executing} 
+              className="flex items-center space-x-2 bg-green-600 hover:bg-green-700"
+            >
+              <PlayIcon className="w-4 h-4" />
+              <span>{executing ? 'Executing...' : 'Run Strategy'}</span>
+            </Button>
           </div>
-          <Button 
-            onClick={handleExecuteStrategy} 
-            disabled={executing} 
-            className="flex items-center space-x-2 bg-green-600 hover:bg-green-700"
-          >
-            <PlayIcon className="w-4 h-4" />
-            <span>{executing ? 'Executing...' : 'Run Strategy'}</span>
-          </Button>
         </div>
-
-        {hasUnsavedChanges && (
-          <div className="bg-orange-900/20 border border-orange-700 rounded-lg p-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></div>
-                <span className="text-orange-300 text-sm">You have unsaved changes (edges or deletions)</span>
-              </div>
-              <div className="flex space-x-2">
-                <Button 
-                  onClick={() => {
-                    setEdgeChangeFlag(false);
-                    setHasUnsavedChanges(false);
-                    loadStrategyFlow(); // Reload to reset edges
-                  }}
-                  className="bg-gray-600 hover:bg-gray-700 text-white"
-                  size="sm"
-                >
-                  Reset Layout
-                </Button>
-                <Button 
-                  onClick={saveFlowChanges}
-                  className="bg-orange-600 hover:bg-orange-700 text-white"
-                  size="sm"
-                >
-                  Save Changes
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
 
         <div className="h-[500px] bg-gray-900 rounded-lg border border-gray-700 relative overflow-hidden">
           <ReactFlow
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChangeWrapper}
-            onConnect={onConnectWithTracking}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
             nodeTypes={nodeTypes}
             defaultEdgeOptions={edgeOptions}
             fitView
             fitViewOptions={{ 
-              padding: 0.05, 
-              minZoom: 0.4, 
+              padding: 0.1, 
+              minZoom: 0.3, 
               maxZoom: 1.5,
               includeHiddenNodes: false
             }}
-            defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
+            defaultViewport={{ x: 0, y: 0, zoom: 0.7 }}
             className="bg-gray-900"
             connectionLineStyle={{ stroke: '#ffffff', strokeWidth: 2 }}
             connectionLineType={ConnectionLineType.SmoothStep}
@@ -1315,12 +962,12 @@ export default function StrategyFlowEditor({ strategyId, onClose, onRefetch }: S
               // Fit view with slight delay to ensure all nodes are rendered
               setTimeout(() => {
                 reactFlowInstance.fitView({ 
-                  padding: 0.08, 
-                  minZoom: 0.4, 
-                  maxZoom: 1.3,
-                  duration: 600 
+                  padding: 0.15, 
+                  minZoom: 0.3, 
+                  maxZoom: 1.2,
+                  duration: 800 
                 });
-              }, 200);
+              }, 300);
             }}
           >
             <Controls className="bg-gray-800 border border-gray-600 text-white" />
@@ -1752,10 +1399,10 @@ export default function StrategyFlowEditor({ strategyId, onClose, onRefetch }: S
   };
 
   const handleDeleteConditionNode = async (id: number) => {
-    // Mark for deletion locally instead of calling API immediately
-    setDeletedConditionNodes(prev => [...prev, id]);
-    // Remove from current local state
-    setConditionNodes(prev => prev.filter(node => node.id !== id));
+    const result = await api.deleteConditionNode(strategyId, id);
+    if (result.success) {
+      await loadStrategyFlow();
+    }
   };
 
   const handleSaveStrategyTriggerNode = async (triggerNode: StrategyTriggerNode) => {
@@ -1779,10 +1426,10 @@ export default function StrategyFlowEditor({ strategyId, onClose, onRefetch }: S
   };
 
   const handleDeleteStrategyTriggerNode = async (id: number) => {
-    // Mark for deletion locally instead of calling API immediately
-    setDeletedStrategyTriggerNodes(prev => [...prev, id]);
-    // Remove from current local state
-    setStrategyTriggerNodes(prev => prev.filter(node => node.id !== id));
+    const result = await api.deleteStrategyTriggerNode(strategyId, id);
+    if (result.success) {
+      await loadStrategyFlow();
+    }
   };
 
   const handleSaveTelegramMessageNode = async (telegramNode: TelegramMessageNode) => {
@@ -1806,10 +1453,10 @@ export default function StrategyFlowEditor({ strategyId, onClose, onRefetch }: S
   };
 
   const handleDeleteTelegramMessageNode = async (id: number) => {
-    // Mark for deletion locally instead of calling API immediately
-    setDeletedTelegramMessageNodes(prev => [...prev, id]);
-    // Remove from current local state
-    setTelegramMessageNodes(prev => prev.filter(node => node.id !== id));
+    const result = await api.deleteTelegramMessageNode(strategyId, id);
+    if (result.success) {
+      await loadStrategyFlow();
+    }
   };
 
   const handleSaveStrategy = async (strategyData: any) => {
@@ -1846,25 +1493,132 @@ export default function StrategyFlowEditor({ strategyId, onClose, onRefetch }: S
           <Card className="w-full max-w-6xl max-h-[85vh] overflow-hidden">
             <CardHeader className="border-b pb-3">
               <div className="flex justify-between items-center">
-                <div className="flex items-center space-x-3">
-                  <CardTitle className="text-xl text-white">Strategy Flow Editor</CardTitle>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setEditingStrategy(strategy)}
-                    className="flex items-center space-x-1"
-                  >
-                    <EditIcon className="w-4 h-4" />
-                  </Button>
-                </div>
+                <CardTitle className="text-xl text-white">Strategy Flow Editor</CardTitle>
                 <Button variant="outline" onClick={onClose}>
                   <XMarkIcon className="w-4 h-4" />
+                </Button>
+              </div>
+              
+              <div className="flex space-x-1 mt-3">
+                <Button
+                  variant={selectedTab === 'flow' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSelectedTab('flow')}
+                >
+                  Flow View
+                </Button>
+                <Button
+                  variant={selectedTab === 'api' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSelectedTab('api')}
+                >
+                  API Calls ({apiCalls.length})
+                </Button>
+                <Button
+                  variant={selectedTab === 'model' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSelectedTab('model')}
+                >
+                  Model Calls ({modelCalls.length})
+                </Button>
+                <Button
+                  variant={selectedTab === 'condition' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSelectedTab('condition')}
+                >
+                  Conditions ({conditionNodes.length})
+                </Button>
+                <Button
+                  variant={selectedTab === 'trigger' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSelectedTab('trigger')}
+                >
+                  Triggers ({strategyTriggerNodes.length})
+                </Button>
+                <Button
+                  variant={selectedTab === 'telegram' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSelectedTab('telegram')}
+                >
+                  Telegram ({telegramMessageNodes.length})
+                </Button>
+                <Button
+                  variant={selectedTab === 'settings' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSelectedTab('settings')}
+                >
+                  Settings
                 </Button>
               </div>
             </CardHeader>
             
             <CardContent className="max-h-[65vh] overflow-y-auto p-4">
-              {renderFlowView()}
+              {selectedTab === 'flow' && renderFlowView()}
+              {selectedTab === 'api' && renderApiCallsTab()}
+              {selectedTab === 'model' && renderModelCallsTab()}
+              {selectedTab === 'condition' && renderConditionNodesTab()}
+              {selectedTab === 'trigger' && renderStrategyTriggerNodesTab()}
+              {selectedTab === 'telegram' && renderTelegramMessageNodesTab()}
+              {selectedTab === 'settings' && (
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-semibold text-white">Strategy Settings</h3>
+                    <Button onClick={() => setEditingStrategy(strategy)} className="flex items-center space-x-2">
+                      <EditIcon className="w-4 h-4" />
+                      <span>Edit Strategy</span>
+                    </Button>
+                  </div>
+                  
+                  {strategy ? (
+                    <div className="grid gap-6">
+                      <Card className="bg-gray-800 border-gray-700">
+                        <CardContent className="p-6">
+                          <div className="grid gap-4">
+                            <div>
+                              <Label className="text-white">Name</Label>
+                              <div className="text-gray-300 font-medium">{strategy.name}</div>
+                            </div>
+                            <div>
+                              <Label className="text-white">Description</Label>
+                              <div className="text-gray-300">{strategy.description || 'No description provided'}</div>
+                            </div>
+                            <div className="flex items-center space-x-2 mb-4">
+                              <input
+                                type="checkbox"
+                                id="manualOnly"
+                                checked={strategy.cron === null || strategy.cron === ''}
+                                onChange={(e) => setEditingStrategy({...strategy, cron: e.target.checked ? null : '*/5 * * * *'})}
+                                className="rounded"
+                              />
+                              <Label htmlFor="manualOnly">Manual execution only (no automatic schedule)</Label>
+                            </div>
+                            {strategy.cron && (
+                              <div>
+                                <Label htmlFor="cron">Cron Expression</Label>
+                                <Input
+                                  id="cron"
+                                  value={strategy.cron || ''}
+                                  onChange={(e) => setEditingStrategy({...strategy, cron: e.target.value})}
+                                  placeholder="0 9 * * *"
+                                />
+                                <p className="text-xs text-gray-400 mt-1">
+                                  Format: minute hour day month weekday (e.g., "0 9 * * *" = 9 AM daily)
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  ) : (
+                    <Card className="bg-gray-800 border-gray-700">
+                      <CardContent className="p-8 text-center">
+                        <div className="text-gray-400">Loading strategy settings...</div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
