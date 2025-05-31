@@ -1,12 +1,11 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import DashboardLayout from './components/layout/DashboardLayout';
+import Docs from './pages/Docs';
 import Home from './pages/Home';
+import Settings from './pages/Settings';
 import Signals from './pages/Signals';
 import Strategies from './pages/Strategies';
-import Admins from './pages/Admins';
-import Settings from './pages/Settings';
-import CodeEditor from './pages/CodeEditor';
+import Users from './pages/Users';
 
 function App() {
   return (
@@ -16,9 +15,9 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/signals" element={<Signals />} />
           <Route path="/strategies" element={<Strategies />} />
-          <Route path="/admins" element={<Admins />} />
+          <Route path="/users" element={<Users />} />
           <Route path="/settings" element={<Settings />} />
-          <Route path="/code-editor" element={<CodeEditor />} />
+          <Route path="/docs" element={<Docs />} />
         </Routes>
       </DashboardLayout>
     </Router>

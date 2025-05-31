@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import React, { useEffect, useState } from 'react';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
-import { useApi, Admin } from '../services/websocketService';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Admin, useApi } from '../services/websocketService';
 
 // Icons as simple components
 const AdminIcon = () => <span className="text-lg">👤</span>;
@@ -18,7 +18,7 @@ const CancelIcon = () => <span className="text-sm">❌</span>;
 const CheckIcon = () => <span className="text-sm">✅</span>;
 const WarningIcon = () => <span className="text-lg">⚠️</span>;
 
-export default function Admins() {
+export default function Users() {
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [allUsers, setAllUsers] = useState<Admin[]>([]);
   const [loading, setLoading] = useState(true);
@@ -195,7 +195,7 @@ export default function Admins() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-blue-400 mb-2">
-            👥 Admin Management
+            👥 Users Management
           </h1>
           <p className="text-gray-400">
             Manage Telegram admin permissions and user roles

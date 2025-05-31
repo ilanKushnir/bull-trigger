@@ -1,7 +1,7 @@
-# 📈 Bull Trigger – Product Requirements Document (v2.0)
+# 📈 Bull Trigger – Product Requirements Document (v2.1)
 
-> **Last updated:** 2025‑05‑29   
-> **License:** MIT   
+> **Last updated:** 2025‑05‑31   
+> **License:** MIT   
 > **Status:** Public open‑source spec
 
 ---
@@ -13,7 +13,7 @@ Bull Trigger is an open‑source, self‑hostable crypto‑signal platform that:
 * **Scans** the market with multiple modular strategies powered by OpenAI models.
 * **Posts** concise, beginner‑friendly signals and market alerts to a Telegram group (inline‑button reactions).
 * **Provides** a techy, modern web dashboard (React + Tailwind + shadcn/ui) for configuration and monitoring.
-* **Stores everything**—prompts, strategies, schedules, API calls, admins, model tiers, settings—in SQLite so non‑developers can tweak behaviour without redeploying.
+* **Stores everything**—prompts, strategies, schedules, API calls, users, model tiers, settings—in SQLite so non‑developers can tweak behaviour without redeploying.
 * **Ships** as a single `docker compose` stack, runs arm64 (Raspberry Pi 5) or x86, and follows OSS best‑practices (CI, docs, secrets hygiene).
 
 Key success metrics:
@@ -31,7 +31,7 @@ Key success metrics:
 | Persona         | Interface            | Key Actions                                                        |
 | --------------- | -------------------- | ------------------------------------------------------------------ |
 | **Trader**      | Telegram             | Reads messages; clicks inline buttons 👍 ✅ ❌; views */history N*   |
-| **Admin**       | Telegram + Dashboard | Issues commands; manages strategies/prompts; edits settings/admins |
+| **Admin**       | Telegram + Dashboard | Issues commands; manages strategies/prompts; edits settings/users |
 | **Contributor** | GitHub + Docs        | Forks repo; submits PR; extends strategy templates                 |
 
 Inline buttons appear **only** on brand‑new signal posts; reminders exclude buttons.
@@ -58,7 +58,7 @@ SQLite (file + Drizzle ORM) ◀───────┘
 | Table                   | Purpose                                                                           |
 | ----------------------- | --------------------------------------------------------------------------------- |
 | `settings`              | key/value (MODEL_DEEP, MODEL_CHEAP, TOKEN_LIMIT_MONTH, WARN %, PANIC %, etc.) |
-| `admins`                | Telegram IDs & execution rights                                                   |
+| `users`                 | Telegram IDs & execution rights (formerly `admins`)                              |
 | `strategies`            | id, name, cron, enabled, model tier, trigger_json, description                   |
 | `prompts`               | id, strategy_id ⇢ text                                                           |
 | `strategy_calls`        | ordered nodes: api or model step (config JSON)                                    |
@@ -93,7 +93,12 @@ Admins can **add strategies** via UI, defining:
 * Trigger edges to other strategies
 * Trigger condition JSON schema (evaluated server‑side)
 
-The dashboard renders each strategy's flow in a React Flow canvas; nodes (calls) and edges (triggers) can be dragged, edited, added or removed.
+The dashboard renders each strategy's flow in a **React Flow visual editor** with simplified interface:
+- Clean strategy builder without tab navigation
+- Nodes (calls) and edges (triggers) can be dragged, edited, added or removed
+- Settings accessible via edit icon next to strategy title
+- Run Strategy button positioned on the right for immediate execution
+- Optimized zoom settings for better initial view
 
 ---
 
@@ -119,13 +124,41 @@ Simple logic:
 
 ## 8 · Dashboard Features
 
+### Navigation Structure
+The dashboard features a **streamlined sidebar** with main navigation at top and documentation access in footer:
+
+**Main Navigation:**
+- 🏠 Home
+- 📈 Signals  
+- ⚙️ Strategies
+- 👥 Users (formerly Admins)
+- ⚙️ Settings
+
+**Footer:**
+- `docs` button (left-aligned, access to live documentation)
+- `version 1.0.0` (right-aligned)
+
+### Feature Details
+
 | Section    | Features                                                                                      |
 | ---------- | --------------------------------------------------------------------------------------------- |
 | Home       | System health, token usage gauge, latest alerts                                               |
 | Signals    | Paginated table (status chips, join/profit counts)                                            |
-| Strategies | React Flow builder; enable/disable; Run Now; prompt editor (Monaco); cron field; trigger JSON |
-| Admins     | CRUD Telegram IDs & permissions                                                               |
+| Strategies | **Enhanced React Flow builder** with simplified UI; enable/disable; Run Now; prompt editor (Monaco); cron field; trigger JSON |
+| Users      | CRUD Telegram IDs & permissions (renamed from Admins for clarity)                            |
 | Settings   | MODEL_DEEP / MODEL_CHEAP selectors; token limit; reset button                               |
+| **Docs**   | **Live GitHub integration** - fetches documentation directly from repository with categorization, markdown rendering, and GitHub links |
+
+### Documentation System
+
+The **Docs section** features:
+- **Live GitHub API integration** - automatically fetches content from `github.com/ilanKushnir/bull-trigger/docs`
+- **Document categorization** - guide, reference, changelog, config based on filename patterns
+- **Real-time content** - always shows latest documentation from main branch
+- **Markdown rendering** with syntax highlighting (`react-markdown` + `@tailwindcss/typography`)
+- **Loading states and error handling** with retry functionality
+- **External links** - "View Raw" and "GitHub" buttons for each document
+- **Responsive design** with beautiful typography
 
 All forms validate with Zod and save via REST.
 
@@ -144,7 +177,7 @@ All forms validate with Zod and save via REST.
 
 * **MIT licence**.
 * **Contributing guide**, Code of Conduct, PR/Issue templates.
-* **Docs site** via Docsify & GitHub Pages (`/docs`).
+* **Live docs integration** - documentation served directly from GitHub repository with real-time updates.
 * CI pipeline: lint → build → test → docker build/push `ghcr.io/<org>/bull-trigger`.
 * Example deployment configs:
 
@@ -154,16 +187,32 @@ All forms validate with Zod and save via REST.
 
 ---
 
-## 11 · Roadmap
+## 11 · Implementation Status & Roadmap
 
-| Phase | Highlights                                      |
-| ----- | ----------------------------------------------- |
-| 1     | Repo, DB, Telegram gateway, basic strategies    |
-| 2     | LangGraph router, signal pipeline, dedup        |
-| 3     | Dashboard MVP (CRUD)                            |
-| 4     | Visual strategy builder & token watcher         |
-| 5     | Docker prod stack, Docsify, CI/CD, v1.0 release |
+### ✅ Completed (v2.1)
+- Enhanced strategy visual editor with simplified UI
+- Live documentation system with GitHub integration
+- Users management system (renamed from Admins)
+- Streamlined sidebar navigation with footer documentation access
+- React Flow optimization for better UX
+- Error handling improvements across dashboard
+- Markdown rendering with syntax highlighting
+
+### 🔄 Current Phase
+| Phase | Highlights                                      | Status |
+| ----- | ----------------------------------------------- | ------ |
+| 1     | Repo, DB, Telegram gateway, basic strategies    | ✅     |
+| 2     | LangGraph router, signal pipeline, dedup        | ✅     |
+| 3     | Dashboard MVP (CRUD)                            | ✅     |
+| 4     | Visual strategy builder & token watcher         | ✅     |
+| 5     | Docker prod stack, live docs, CI/CD, v1.0 release | 🔄     |
+
+### 🎯 Next Milestones
+- Complete Docker production stack
+- Finalize CI/CD pipeline
+- Performance optimizations
+- v1.0 release preparation
 
 ---
 
-✅ **End of v2.0 PRD**
+✅ **End of v2.1 PRD**
