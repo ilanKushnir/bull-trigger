@@ -150,6 +150,7 @@ class ApiService {
   async runStrategy(id: number): Promise<ApiResponse<{ ok: boolean }>> {
     return this.request<{ ok: boolean }>(`/api/strategies/${id}/run`, {
       method: 'POST',
+      body: JSON.stringify({}),
     });
   }
 

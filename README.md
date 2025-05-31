@@ -1,59 +1,105 @@
 # Bull Trigger
 
-> OSS Bootstrap Repository
+> Open-source crypto signal platform with AI-powered strategies
 
-This repository contains the initial open-source scaffold for the Bull Trigger project.
+A self-hostable crypto trading signal generator that uses OpenAI models to analyze market conditions and send intelligent alerts to Telegram.
 
-## Monorepo layout
+## 🚀 Features
 
-- `backend/` – Service code (Node.js)
-- `frontend/` – Web client (React/Vite)
-- `packages/common/` – Shared libraries and tooling
+- **AI-Powered Strategies**: OpenAI integration for market analysis and signal generation
+- **Visual Strategy Builder**: Drag-and-drop flow editor for creating custom strategies
+- **Telegram Integration**: Automated message delivery to channels/groups
+- **Real-time Dashboard**: Modern React web interface for monitoring and control
+- **Token Management**: Built-in usage tracking and limits
+- **SQLite Database**: Self-contained, no external dependencies
 
-## Quick Start
+## 📁 Project Structure
 
-### Dev
+- `backend/` – API server (Node.js + TypeScript + Fastify)
+- `frontend/` – Web dashboard (React + TypeScript + Vite + Tailwind)
+- `docs/` – Documentation and guides
+- `.vscode/` – VSCode debugging configuration
+
+## 🚀 Quick Start
+
+### Development
 ```bash
-make bootstrap
-make up            # http://localhost:5173
+# Start backend (port 3000)
+cd backend && npm install && npm run dev
+
+# Start frontend (port 3001) 
+cd frontend && npm install && npm run dev
 ```
 
-### Prod
+### Production
 ```bash
 make prod-up       # nginx on :80, api on :3000
 ```
 
-### Self-Host
-1. Set env vars in `.env` then `docker compose -f compose.prod.yml up -d`.
-2. Optional Telegram integration requires `TELEGRAM_BOT_TOKEN` + `CHAT_ID`.
-
-## ✨ Contributing & Feedback
-
-See full docs: https://<user>.github.io/bull-trigger
-
-![demo](docs/demo.gif)
-
-## Telegram Setup
-
-1. Create a bot with BotFather and copy the `TELEGRAM_BOT_TOKEN`.
-2. Add your Telegram user ID to the `users` table with `isAdmin=true` (the seed script inserts an example `admin@example.com`, update as needed).
-3. Put the token in `.env`:
-
+### Self-Host with Docker
 ```bash
-TELEGRAM_BOT_TOKEN="your-telegram-bot-token"
+# 1. Configure environment
+cp .env.example .env
+# Edit .env with your OpenAI API key and Telegram credentials
+
+# 2. Start services
+docker compose -f compose.prod.yml up -d
 ```
 
-4. Start the gateway:
+## 📚 Documentation
 
+- **[📋 Product Requirements](docs/product-requirements.md)** - Complete feature specification
+- **[🐛 Debugging Guide](docs/DEBUG.md)** - VSCode setup and troubleshooting
+- **[🗄️ Database Schema](docs/database.md)** - Database structure and models
+- **[⚙️ Strategy Builder](docs/strategies-builder.md)** - Visual flow editor guide
+
+## 🤝 Contributing
+
+- **[Contributing Guidelines](docs/CONTRIBUTING.md)** - How to contribute to the project
+- **[Code of Conduct](docs/CODE_OF_CONDUCT.md)** - Community guidelines
+- **[Changelog](docs/CHANGELOG.md)** - Release history and updates
+
+## 🔧 Setup Guides
+
+### Telegram Bot Setup
+1. Message [@BotFather](https://t.me/BotFather) on Telegram
+2. Create a new bot with `/newbot`
+3. Copy the bot token and add it to your settings
+4. Add the bot as admin to your channel/group
+5. Get your channel ID (starts with `-100` for supergroups)
+
+### OpenAI API Setup
+1. Get an API key from [OpenAI Platform](https://platform.openai.com/api-keys)
+2. Add it to your system settings via the dashboard
+3. Configure token limits and model preferences
+
+## 🛠️ Development
+
+### VSCode Debugging
+The project includes complete VSCode debugging setup:
 ```bash
-npm run --workspace backend bot
+# Use the helper script
+./debug.sh
+
+# Or use VSCode debug panel (Cmd+Shift+D)
+# - 🚀 Debug Backend (Server)
+# - 🌐 Debug Frontend (Chrome)  
+# - 🚀 Debug Full Stack
 ```
 
-Inline commands available:
-- `/analyze_market`
-- `/scrape_signals`
-- `/history`
+### Testing
+```bash
+# Backend tests
+cd backend && npm test
 
-## License
+# Frontend tests  
+cd frontend && npm test
+```
+
+## 📈 Live Demo
+
+![Bull Trigger Dashboard](docs/demo.gif)
+
+## 📄 License
 
 MIT © 2024 Ilan Kushnir 

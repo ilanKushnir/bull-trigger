@@ -684,17 +684,38 @@ export class StrategyFlowService {
     
     finalPrompt = this.interpolateVariables(finalPrompt, variables);
     
-    // For now, return a mock response - in production, integrate with OpenAI
-    const mockResponse = {
-      analysis: `Mock AI analysis for: ${modelCall.name}`,
-      confidence: 0.85,
-      recommendation: "HOLD",
-      reasoning: "Based on the provided data..."
-    };
-    
-    console.log(`[Model Call] ${modelCall.name}:`, { finalPrompt, response: mockResponse });
-    
-    return mockResponse;
+    try {
+      // Import the LLM router dynamically to avoid circular dependencies
+      const { callLLM } = await import('../llm/router');
+      
+      // Call the actual OpenAI API
+      const response = await callLLM(
+        finalPrompt,
+        modelCall.modelTier as 'deep' | 'cheap',
+        modelCall.systemPrompt
+      );
+      
+      console.log(`[Model Call] ${modelCall.name}:`, { finalPrompt, response });
+      
+      return response; // Return the string response directly
+    } catch (error) {
+      console.error(`[Model Call] ${modelCall.name} failed:`, error);
+      
+      // Fallback to mock response if OpenAI fails (e.g., no API key)
+      const mockResponse = `💡 **Mock Trading Tip**
+
+🔹 Always set stop-loss orders to limit potential losses
+🔹 Never invest more than you can afford to lose  
+🔹 Diversify your portfolio across different cryptocurrencies
+🔹 Keep emotions in check - stick to your trading plan
+🔹 Stay updated with market news and trends
+
+⚠️ *This is a mock response - configure OpenAI API key for real AI tips*`;
+      
+      console.log(`[Model Call] ${modelCall.name}: Using fallback response due to error`);
+      
+      return mockResponse;
+    }
   }
   
   private buildApiDataSummary(variables: Record<string, any>): string {

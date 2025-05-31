@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { ChatOpenAI } from '@langchain/openai';
+import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { getModel, getSetting, incrementTokenUsage } from '../utils/settings';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || getSetting('OPENAI_API_KEY');
@@ -47,10 +48,10 @@ export async function callLLM(
     let messages = [];
     
     if (systemPrompt) {
-      messages.push({ role: 'system', content: systemPrompt });
+      messages.push(new SystemMessage(systemPrompt));
     }
     
-    messages.push({ role: 'user', content: prompt });
+    messages.push(new HumanMessage(prompt));
     
     const response = await llm.invoke(messages);
     return response.content as string;
