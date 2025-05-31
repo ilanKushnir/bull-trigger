@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
-import path from 'path';
 import { JSONPath } from 'jsonpath-plus';
+import path from 'path';
 
 // Use the same database path logic as server.ts
 const cwd = process.cwd();
@@ -909,15 +909,91 @@ export class StrategyFlowService {
     
     console.log(`[Strategy Trigger] ${triggerNode.name}: Triggering strategy ${triggerNode.targetStrategyId}`);
     
-    // For now, just log the trigger - in production, this would actually execute the target strategy
-    const mockResult = {
-      triggered: true,
-      targetStrategyId: triggerNode.targetStrategyId,
-      passedVariables: triggerNode.passVariables || [],
-      waitForCompletion: triggerNode.waitForCompletion
-    };
-    
-    return mockResult;
+    try {
+      // Import the strategy execution service to avoid circular dependencies
+      const { strategyExecutionService } = await import('../services/strategyExecutionService');
+      
+      // Start execution tracking for the triggered strategy
+      const executionId = strategyExecutionService.startExecution(triggerNode.targetStrategyId, 'manual');
+      
+      // Prepare variables to pass to the target strategy
+      const passedVariables: Record<string, any> = {};
+      if (triggerNode.passVariables && Array.isArray(triggerNode.passVariables)) {
+        triggerNode.passVariables.forEach(varName => {
+          if (variables[varName] !== undefined) {
+            passedVariables[varName] = variables[varName];
+          }
+        });
+      }
+      
+      if (triggerNode.waitForCompletion) {
+        // Execute the target strategy and wait for completion
+        const targetResult = await this.executeStrategyFlow(triggerNode.targetStrategyId, executionId);
+        
+        if (targetResult.success) {
+          strategyExecutionService.completeExecution(executionId);
+          console.log(`[Strategy Trigger] ${triggerNode.name}: Target strategy ${triggerNode.targetStrategyId} completed successfully`);
+          
+          return {
+            triggered: true,
+            targetStrategyId: triggerNode.targetStrategyId,
+            passedVariables: Object.keys(passedVariables),
+            waitForCompletion: true,
+            targetResult: targetResult.variables,
+            success: true
+          };
+        } else {
+          strategyExecutionService.failExecution(executionId, targetResult.error);
+          console.error(`[Strategy Trigger] ${triggerNode.name}: Target strategy ${triggerNode.targetStrategyId} failed:`, targetResult.error);
+          
+          return {
+            triggered: true,
+            targetStrategyId: triggerNode.targetStrategyId,
+            passedVariables: Object.keys(passedVariables),
+            waitForCompletion: true,
+            success: false,
+            error: targetResult.error
+          };
+        }
+      } else {
+        // Fire and forget - start the strategy execution but don't wait
+        console.log(`[Strategy Trigger] ${triggerNode.name}: Started strategy ${triggerNode.targetStrategyId} (fire and forget)`);
+        
+        // Execute in background (fire and forget)
+        this.executeStrategyFlow(triggerNode.targetStrategyId, executionId)
+          .then(result => {
+            if (result.success) {
+              strategyExecutionService.completeExecution(executionId);
+              console.log(`[Strategy Trigger] Background execution of strategy ${triggerNode.targetStrategyId} completed`);
+            } else {
+              strategyExecutionService.failExecution(executionId, result.error);
+              console.error(`[Strategy Trigger] Background execution of strategy ${triggerNode.targetStrategyId} failed:`, result.error);
+            }
+          })
+          .catch(error => {
+            strategyExecutionService.failExecution(executionId, error.message);
+            console.error(`[Strategy Trigger] Background execution of strategy ${triggerNode.targetStrategyId} crashed:`, error);
+          });
+        
+        return {
+          triggered: true,
+          targetStrategyId: triggerNode.targetStrategyId,
+          passedVariables: Object.keys(passedVariables),
+          waitForCompletion: false,
+          success: true,
+          executionId
+        };
+      }
+    } catch (error) {
+      console.error(`[Strategy Trigger] ${triggerNode.name}: Failed to trigger strategy ${triggerNode.targetStrategyId}:`, error);
+      
+      return {
+        triggered: false,
+        targetStrategyId: triggerNode.targetStrategyId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        success: false
+      };
+    }
   }
   
   private async executeTelegramMessageNode(telegramNode: TelegramMessageNode, variables: Record<string, any>): Promise<any> {
@@ -942,26 +1018,77 @@ export class StrategyFlowService {
     console.log(`[Telegram Message] ${telegramNode.name}: Sending to ${telegramNode.chatId}`);
     console.log(`Message: ${finalMessage}`);
     
-    // For now, just log the message - in production, this would actually send to Telegram
-    const mockResult = {
-      sent: true,
-      chatId: telegramNode.chatId,
-      message: finalMessage,
-      messageType: telegramNode.messageType,
-      parseMode: telegramNode.parseMode
-    };
-    
-    return mockResult;
+    try {
+      // Import sendMessage dynamically to avoid circular dependencies
+      const { sendMessage } = await import('../telegram/gateway');
+      
+      // Actually send the message to Telegram
+      const telegramResult = await sendMessage(finalMessage);
+      
+      console.log(`[Telegram Message] ${telegramNode.name}: Successfully sent to Telegram`, telegramResult);
+      
+      return {
+        sent: true,
+        chatId: telegramNode.chatId,
+        message: finalMessage,
+        messageType: telegramNode.messageType,
+        parseMode: telegramNode.parseMode,
+        telegramResult
+      };
+    } catch (error) {
+      console.error(`[Telegram Message] ${telegramNode.name}: Failed to send to Telegram:`, error);
+      
+      // Return mock result as fallback if Telegram fails
+      return {
+        sent: false,
+        chatId: telegramNode.chatId,
+        message: finalMessage,
+        messageType: telegramNode.messageType,
+        parseMode: telegramNode.parseMode,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
   }
   
   private getVariableValue(operand: string, variables: Record<string, any>): any {
     // If operand starts with $, treat as JSONPath
     if (operand.startsWith('$')) {
-      // For now, just return the variable directly
-      return variables[operand.substring(1)] || operand;
+      const varName = operand.substring(1);
+      const targetValue = variables[varName];
+      
+      if (targetValue === undefined) {
+        console.warn(`Variable '${varName}' not found in variables:`, Object.keys(variables));
+        return operand; // Return the original operand if variable not found
+      }
+      
+      // If the target value is an object/array and we have a complex path like "btcPrice.value"
+      if (varName.includes('.') && typeof targetValue === 'object' && targetValue !== null) {
+        try {
+          // Use JSONPath for complex path navigation
+          const pathParts = varName.split('.');
+          let result = variables[pathParts[0]];
+          
+          for (let i = 1; i < pathParts.length; i++) {
+            if (result && typeof result === 'object') {
+              result = result[pathParts[i]];
+            } else {
+              console.warn(`Cannot navigate path '${varName}' - intermediate value is not an object`);
+              return operand;
+            }
+          }
+          
+          return result;
+        } catch (error) {
+          console.error(`Failed to navigate path '${varName}':`, error);
+          return operand;
+        }
+      }
+      
+      return targetValue;
     }
-    // Otherwise, treat as variable name
-    return variables[operand] || operand;
+    
+    // Otherwise, treat as variable name or literal value
+    return variables[operand] !== undefined ? variables[operand] : operand;
   }
 }
 
