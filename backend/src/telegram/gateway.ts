@@ -177,8 +177,8 @@ export async function sendMessage(text: string, buttons?: any) {
   }
   
   try {
+    // Send as plain text to avoid markdown parsing issues
     const result = await bot.telegram.sendMessage(chatId, text, {
-      parse_mode: 'Markdown',
       ...(buttons ? { reply_markup: buttons } : {})
     });
     

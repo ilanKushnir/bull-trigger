@@ -1,6 +1,6 @@
 // @ts-nocheck
-import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { ChatOpenAI } from '@langchain/openai';
 import { getModel, getSetting, incrementTokenUsage } from '../utils/settings';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || getSetting('OPENAI_API_KEY');
@@ -8,8 +8,10 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY || getSetting('OPENAI_API_KEY'
 export function getLLM(type: 'deep' | 'cheap' = 'cheap') {
   const modelName = getModel(type);
   
-  const llm = new ChatOpenAI({
-    temperature: 0.2,
+  // O3 models don't support temperature parameter
+  const isO3Model = modelName.includes('o3') || modelName.includes('o1');
+  
+  const llmConfig: any = {
     modelName,
     openAIApiKey: OPENAI_API_KEY,
     callbacks: [
@@ -29,7 +31,14 @@ export function getLLM(type: 'deep' | 'cheap' = 'cheap') {
         }
       }
     ]
-  });
+  };
+  
+  // Only add temperature for models that support it
+  if (!isO3Model) {
+    llmConfig.temperature = 0.2;
+  }
+  
+  const llm = new ChatOpenAI(llmConfig);
   
   return llm;
 }

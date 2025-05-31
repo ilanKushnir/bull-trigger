@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -411,8 +412,13 @@ export default function Docs() {
                         prose-blockquote:border-l-blue-500 prose-blockquote:border-l-4 prose-blockquote:pl-4 prose-blockquote:italic
                         prose-ul:text-gray-300 prose-ol:text-gray-300
                         prose-li:mb-1
-                        prose-a:text-blue-400 prose-a:underline hover:prose-a:text-blue-300">
-                      <ReactMarkdown>
+                        prose-a:text-blue-400 prose-a:underline hover:prose-a:text-blue-300
+                        prose-table:border-collapse prose-table:border prose-table:border-gray-600 prose-table:bg-gray-800
+                        prose-thead:bg-gray-700
+                        prose-th:border prose-th:border-gray-600 prose-th:px-4 prose-th:py-2 prose-th:text-white prose-th:font-semibold
+                        prose-td:border prose-td:border-gray-600 prose-td:px-4 prose-td:py-2 prose-td:text-gray-300
+                        prose-tr:border-gray-600">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {docContent}
                       </ReactMarkdown>
                     </div>

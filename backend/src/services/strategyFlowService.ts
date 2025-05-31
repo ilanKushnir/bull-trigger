@@ -529,6 +529,7 @@ export class StrategyFlowService {
       includeApiData: 'include_api_data',
       onlyIfVariable: 'only_if_variable',
       messageType: 'message_type',
+      type: 'message_type', // Handle frontend sending 'type' instead of 'messageType'
       orderIndex: 'order_index',
       name: 'name',
       chatId: 'chat_id',
@@ -783,7 +784,8 @@ export class StrategyFlowService {
     if (!text || typeof text !== 'string') {
       return '';
     }
-    return text.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+    // Support both single {variable} and double {{variable}} braces
+    return text.replace(/\{(\w+)\}/g, (match, varName) => {
       return variables[varName] !== undefined ? String(variables[varName]) : match;
     });
   }
