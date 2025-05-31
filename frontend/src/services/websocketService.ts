@@ -91,7 +91,7 @@ class ApiService {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000';
+    this.baseUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001';
   }
 
   private async request<T>(
@@ -249,6 +249,42 @@ class ApiService {
     });
   }
 
+  // ===== SETTINGS MANAGEMENT =====
+  
+  async getSettings(): Promise<ApiResponse<Record<string, any>>> {
+    return this.request<Record<string, any>>('/api/settings');
+  }
+
+  async getSetting(key: string): Promise<ApiResponse<{ value: any }>> {
+    return this.request<{ value: any }>(`/api/settings/${key}`);
+  }
+
+  async updateSettings(settings: Record<string, any>): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>('/api/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  }
+
+  async updateSetting(key: string, value: any): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>(`/api/settings/${key}`, {
+      method: 'PUT',
+      body: JSON.stringify({ value }),
+    });
+  }
+
+  async deleteSetting(key: string): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>(`/api/settings/${key}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async resetAllSettings(): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>('/api/settings/reset', {
+      method: 'POST',
+    });
+  }
+
   // ===== HEALTH CHECK =====
   async healthCheck(): Promise<ApiResponse<{ status: string; websocket?: any }>> {
     return this.request<{ status: string; websocket?: any }>('/healthz');
@@ -382,7 +418,7 @@ class WebSocketClient {
   private reconnectDelay = 1000;
   private listeners: Map<string, EventCallback[]> = new Map();
 
-  public connect(url: string = 'http://localhost:3000'): void {
+  public connect(url: string = 'http://localhost:3001'): void {
     if (this.socket?.connected) {
       console.log('🔌 WebSocket already connected');
       return;
@@ -639,6 +675,14 @@ export function useApi() {
     getTelegramMessageNodes: apiService.getTelegramMessageNodes.bind(apiService),
     createTelegramMessageNode: apiService.createTelegramMessageNode.bind(apiService),
     updateTelegramMessageNode: apiService.updateTelegramMessageNode.bind(apiService),
-    deleteTelegramMessageNode: apiService.deleteTelegramMessageNode.bind(apiService)
+    deleteTelegramMessageNode: apiService.deleteTelegramMessageNode.bind(apiService),
+
+    // Settings
+    getSettings: apiService.getSettings.bind(apiService),
+    getSetting: apiService.getSetting.bind(apiService),
+    updateSettings: apiService.updateSettings.bind(apiService),
+    updateSetting: apiService.updateSetting.bind(apiService),
+    deleteSetting: apiService.deleteSetting.bind(apiService),
+    resetAllSettings: apiService.resetAllSettings.bind(apiService)
   };
 } 

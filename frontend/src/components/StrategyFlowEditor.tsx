@@ -113,12 +113,12 @@ interface TelegramMessageNode {
 // Custom Node Components
 const StartNode = ({ data }: { data: any }) => {
   return (
-    <div className="px-4 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg shadow-lg border-2 border-green-400 min-w-[120px]">
+    <div className="px-4 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-lg shadow-lg border-2 border-emerald-500 min-w-[120px]">
       <Handle
         type="source"
         position={Position.Right}
         id="start-output"
-        className="!bg-green-300 !border-green-500 !w-3 !h-3"
+        className="!bg-emerald-300 !border-emerald-600 !w-3 !h-3"
       />
       <div className="flex items-center gap-2">
         <div className="w-8 h-8 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
@@ -137,18 +137,18 @@ const StartNode = ({ data }: { data: any }) => {
 
 const ApiCallNode = ({ data }: { data: any }) => {
   return (
-    <div className="px-4 py-3 bg-blue-500 text-white rounded-lg shadow-lg border-2 border-blue-400 min-w-[200px] max-w-[240px]">
+    <div className="px-4 py-3 bg-slate-700 text-white rounded-lg shadow-lg border-2 border-slate-600 min-w-[200px] max-w-[240px]">
       <Handle
         type="target"
         position={Position.Left}
         id="api-input"
-        className="!bg-blue-300 !border-blue-500 !w-3 !h-3"
+        className="!bg-slate-300 !border-slate-600 !w-3 !h-3"
       />
       <Handle
         type="source"
         position={Position.Right}
         id="api-output"
-        className="!bg-blue-300 !border-blue-500 !w-3 !h-3"
+        className="!bg-slate-300 !border-slate-600 !w-3 !h-3"
       />
       <div className="flex items-center space-x-2 mb-1">
         <GlobeIcon className="w-3 h-3 text-blue-100" />
@@ -166,24 +166,24 @@ const ApiCallNode = ({ data }: { data: any }) => {
       <div className="flex justify-end space-x-1">
         <button 
           onClick={() => data.onEdit?.(data)} 
-          className="w-6 h-6 rounded-full bg-blue-500 hover:bg-blue-400 flex items-center justify-center transition-colors group"
+          className="w-6 h-6 rounded-full bg-slate-500 hover:bg-slate-400 flex items-center justify-center transition-colors group"
           title="Edit"
         >
-          <EditIcon className="w-3 h-3 text-white group-hover:text-blue-100" />
+          <EditIcon className="w-3 h-3 text-white group-hover:text-slate-100" />
         </button>
         <button 
           onClick={() => data.onTest?.(data)} 
-          className="w-6 h-6 rounded-full bg-green-500 hover:bg-green-400 flex items-center justify-center transition-colors group"
+          className="w-6 h-6 rounded-full bg-slate-500 hover:bg-slate-400 flex items-center justify-center transition-colors group"
           title="Test"
         >
-          <TestTubeIcon className="w-3 h-3 text-white group-hover:text-green-100" />
+          <TestTubeIcon className="w-3 h-3 text-white group-hover:text-slate-100" />
         </button>
         <button 
           onClick={() => data.onDelete?.(data.id)} 
-          className="w-6 h-6 rounded-full bg-red-500 hover:bg-red-400 flex items-center justify-center transition-colors group"
+          className="w-6 h-6 rounded-full bg-slate-600 hover:bg-slate-500 flex items-center justify-center transition-colors group"
           title="Delete"
         >
-          <TrashIcon className="w-3 h-3 text-white group-hover:text-red-100" />
+          <TrashIcon className="w-3 h-3 text-white group-hover:text-slate-100" />
         </button>
       </div>
     </div>
@@ -192,18 +192,18 @@ const ApiCallNode = ({ data }: { data: any }) => {
 
 const ModelCallNode = ({ data }: { data: any }) => {
   return (
-    <div className="px-4 py-3 bg-purple-500 text-white rounded-lg shadow-lg border-2 border-purple-400 min-w-[200px] max-w-[240px]">
+    <div className="px-4 py-3 bg-indigo-700 text-white rounded-lg shadow-lg border-2 border-indigo-600 min-w-[200px] max-w-[240px]">
       <Handle
         type="target"
         position={Position.Left}
         id="model-input"
-        className="!bg-purple-300 !border-purple-500 !w-3 !h-3"
+        className="!bg-indigo-300 !border-indigo-600 !w-3 !h-3"
       />
       <Handle
         type="source"
         position={Position.Right}
         id="model-output"
-        className="!bg-purple-300 !border-purple-500 !w-3 !h-3"
+        className="!bg-indigo-300 !border-indigo-600 !w-3 !h-3"
       />
       <div className="flex items-center space-x-2 mb-1">
         <BrainIcon className="w-3 h-3 text-purple-100" />
@@ -221,17 +221,17 @@ const ModelCallNode = ({ data }: { data: any }) => {
       <div className="flex justify-end space-x-1">
         <button 
           onClick={() => data.onEdit?.(data)} 
-          className="w-6 h-6 rounded-full bg-purple-500 hover:bg-purple-400 flex items-center justify-center transition-colors group"
+          className="w-6 h-6 rounded-full bg-slate-500 hover:bg-slate-400 flex items-center justify-center transition-colors group"
           title="Edit"
         >
-          <EditIcon className="w-3 h-3 text-white group-hover:text-purple-100" />
+          <EditIcon className="w-3 h-3 text-white group-hover:text-slate-100" />
         </button>
         <button 
           onClick={() => data.onDelete?.(data.id)} 
-          className="w-6 h-6 rounded-full bg-red-500 hover:bg-red-400 flex items-center justify-center transition-colors group"
+          className="w-6 h-6 rounded-full bg-slate-600 hover:bg-slate-500 flex items-center justify-center transition-colors group"
           title="Delete"
         >
-          <TrashIcon className="w-3 h-3 text-white group-hover:text-red-100" />
+          <TrashIcon className="w-3 h-3 text-white group-hover:text-slate-100" />
         </button>
       </div>
     </div>
@@ -240,18 +240,18 @@ const ModelCallNode = ({ data }: { data: any }) => {
 
 const ConditionNode = ({ data }: { data: any }) => {
   return (
-    <div className="px-4 py-3 bg-yellow-500 text-white rounded-lg shadow-lg border-2 border-yellow-400 min-w-[200px] max-w-[240px]">
+    <div className="px-4 py-3 bg-amber-600 text-white rounded-lg shadow-lg border-2 border-amber-500 min-w-[200px] max-w-[240px]">
       <Handle
         type="target"
         position={Position.Left}
         id="condition-input"
-        className="!bg-yellow-300 !border-yellow-500 !w-3 !h-3"
+        className="!bg-amber-300 !border-amber-600 !w-3 !h-3"
       />
       <Handle
         type="source"
         position={Position.Right}
         id="condition-output"
-        className="!bg-yellow-300 !border-yellow-500 !w-3 !h-3"
+        className="!bg-amber-300 !border-amber-600 !w-3 !h-3"
       />
       <div className="flex items-center space-x-2 mb-1">
         <ConditionIcon className="w-3 h-3 text-yellow-100" />
@@ -271,17 +271,17 @@ const ConditionNode = ({ data }: { data: any }) => {
       <div className="flex justify-end space-x-1">
         <button 
           onClick={() => data.onEdit?.(data)} 
-          className="w-6 h-6 rounded-full bg-yellow-500 hover:bg-yellow-400 flex items-center justify-center transition-colors group"
+          className="w-6 h-6 rounded-full bg-slate-500 hover:bg-slate-400 flex items-center justify-center transition-colors group"
           title="Edit"
         >
-          <EditIcon className="w-3 h-3 text-white group-hover:text-yellow-100" />
+          <EditIcon className="w-3 h-3 text-white group-hover:text-slate-100" />
         </button>
         <button 
           onClick={() => data.onDelete?.(data.id)} 
-          className="w-6 h-6 rounded-full bg-red-500 hover:bg-red-400 flex items-center justify-center transition-colors group"
+          className="w-6 h-6 rounded-full bg-slate-600 hover:bg-slate-500 flex items-center justify-center transition-colors group"
           title="Delete"
         >
-          <TrashIcon className="w-3 h-3 text-white group-hover:text-red-100" />
+          <TrashIcon className="w-3 h-3 text-white group-hover:text-slate-100" />
         </button>
       </div>
     </div>
@@ -290,18 +290,18 @@ const ConditionNode = ({ data }: { data: any }) => {
 
 const StrategyTriggerNode = ({ data }: { data: any }) => {
   return (
-    <div className="px-4 py-3 bg-orange-500 text-white rounded-lg shadow-lg border-2 border-orange-400 min-w-[200px] max-w-[240px]">
+    <div className="px-4 py-3 bg-orange-700 text-white rounded-lg shadow-lg border-2 border-orange-600 min-w-[200px] max-w-[240px]">
       <Handle
         type="target"
         position={Position.Left}
         id="trigger-input"
-        className="!bg-orange-300 !border-orange-500 !w-3 !h-3"
+        className="!bg-orange-300 !border-orange-600 !w-3 !h-3"
       />
       <Handle
         type="source"
         position={Position.Right}
         id="trigger-output"
-        className="!bg-orange-300 !border-orange-500 !w-3 !h-3"
+        className="!bg-orange-300 !border-orange-600 !w-3 !h-3"
       />
       <div className="flex items-center space-x-2 mb-1">
         <TriggerIcon className="w-3 h-3 text-orange-100" />
@@ -321,17 +321,17 @@ const StrategyTriggerNode = ({ data }: { data: any }) => {
       <div className="flex justify-end space-x-1">
         <button 
           onClick={() => data.onEdit?.(data)} 
-          className="w-6 h-6 rounded-full bg-orange-500 hover:bg-orange-400 flex items-center justify-center transition-colors group"
+          className="w-6 h-6 rounded-full bg-slate-500 hover:bg-slate-400 flex items-center justify-center transition-colors group"
           title="Edit"
         >
-          <EditIcon className="w-3 h-3 text-white group-hover:text-orange-100" />
+          <EditIcon className="w-3 h-3 text-white group-hover:text-slate-100" />
         </button>
         <button 
           onClick={() => data.onDelete?.(data.id)} 
-          className="w-6 h-6 rounded-full bg-red-500 hover:bg-red-400 flex items-center justify-center transition-colors group"
+          className="w-6 h-6 rounded-full bg-slate-600 hover:bg-slate-500 flex items-center justify-center transition-colors group"
           title="Delete"
         >
-          <TrashIcon className="w-3 h-3 text-white group-hover:text-red-100" />
+          <TrashIcon className="w-3 h-3 text-white group-hover:text-slate-100" />
         </button>
       </div>
     </div>
@@ -340,18 +340,18 @@ const StrategyTriggerNode = ({ data }: { data: any }) => {
 
 const TelegramMessageNode = ({ data }: { data: any }) => {
   return (
-    <div className="px-4 py-3 bg-green-600 text-white rounded-lg shadow-lg border-2 border-green-500 min-w-[200px] max-w-[240px]">
+    <div className="px-4 py-3 bg-teal-700 text-white rounded-lg shadow-lg border-2 border-teal-600 min-w-[200px] max-w-[240px]">
       <Handle
         type="target"
         position={Position.Left}
         id="telegram-input"
-        className="!bg-green-300 !border-green-500 !w-3 !h-3"
+        className="!bg-teal-300 !border-teal-600 !w-3 !h-3"
       />
       <Handle
         type="source"
         position={Position.Right}
         id="telegram-output"
-        className="!bg-green-300 !border-green-500 !w-3 !h-3"
+        className="!bg-teal-300 !border-teal-600 !w-3 !h-3"
       />
       <div className="flex items-center space-x-2 mb-1">
         <TelegramIcon className="w-3 h-3 text-green-100" />
@@ -372,17 +372,17 @@ const TelegramMessageNode = ({ data }: { data: any }) => {
       <div className="flex justify-end space-x-1">
         <button 
           onClick={() => data.onEdit?.(data)} 
-          className="w-6 h-6 rounded-full bg-green-500 hover:bg-green-400 flex items-center justify-center transition-colors group"
+          className="w-6 h-6 rounded-full bg-slate-500 hover:bg-slate-400 flex items-center justify-center transition-colors group"
           title="Edit"
         >
-          <EditIcon className="w-3 h-3 text-white group-hover:text-green-100" />
+          <EditIcon className="w-3 h-3 text-white group-hover:text-slate-100" />
         </button>
         <button 
           onClick={() => data.onDelete?.(data.id)} 
-          className="w-6 h-6 rounded-full bg-red-500 hover:bg-red-400 flex items-center justify-center transition-colors group"
+          className="w-6 h-6 rounded-full bg-slate-600 hover:bg-slate-500 flex items-center justify-center transition-colors group"
           title="Delete"
         >
-          <TrashIcon className="w-3 h-3 text-white group-hover:text-red-100" />
+          <TrashIcon className="w-3 h-3 text-white group-hover:text-slate-100" />
         </button>
       </div>
     </div>
@@ -585,25 +585,15 @@ export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlow
               type: 'smoothstep',
               animated: true,
               style: { 
-                stroke: '#3b82f6', 
-                strokeWidth: 6,  // Make thicker for visibility
-                zIndex: 1000,    // Force on top
+                stroke: '#64748b', 
+                strokeWidth: 3,
+                zIndex: 1000,
               },
               markerEnd: {
                 type: MarkerType.ArrowClosed,
-                color: '#3b82f6',
+                color: '#64748b',
                 width: 8,
                 height: 8,
-              },
-              label: 'Parallel',
-              labelStyle: { 
-                fill: '#3b82f6', 
-                fontWeight: 600,
-                fontSize: '12px',
-              },
-              labelBgStyle: { 
-                fill: '#1e293b', 
-                fillOpacity: 0.8,
               },
             };
             newEdges.push(edge);
@@ -625,25 +615,15 @@ export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlow
             type: 'smoothstep',
             animated: true,
             style: { 
-              stroke: '#10b981', 
-              strokeWidth: 6,  // Make thicker for visibility
-              zIndex: 1000,    // Force on top
+              stroke: '#64748b', 
+              strokeWidth: 3,
+              zIndex: 1000,
             },
             markerEnd: {
               type: MarkerType.ArrowClosed,
-              color: '#10b981',
+              color: '#64748b',
               width: 8,
               height: 8,
-            },
-            label: 'Next',
-            labelStyle: { 
-              fill: '#10b981', 
-              fontWeight: 600,
-              fontSize: '12px',
-            },
-            labelBgStyle: { 
-              fill: '#1e293b', 
-              fillOpacity: 0.8,
             },
           };
           newEdges.push(edge);
@@ -661,25 +641,15 @@ export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlow
               type: 'smoothstep',
               animated: true,
               style: { 
-                stroke: '#f59e0b', 
-                strokeWidth: 6,  // Make thicker for visibility
-                zIndex: 1000,    // Force on top
+                stroke: '#64748b', 
+                strokeWidth: 3,
+                zIndex: 1000,
               },
               markerEnd: {
                 type: MarkerType.ArrowClosed,
-                color: '#f59e0b',
+                color: '#64748b',
                 width: 8,
                 height: 8,
-              },
-              label: 'Converge',
-              labelStyle: { 
-                fill: '#f59e0b', 
-                fontWeight: 600,
-                fontSize: '12px',
-              },
-              labelBgStyle: { 
-                fill: '#1e293b', 
-                fillOpacity: 0.8,
               },
             };
             newEdges.push(edge);

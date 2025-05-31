@@ -1,6 +1,7 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import Database from 'better-sqlite3';
+import { getTokenUsage, getSetting, notificationsEnabled } from '../utils/settings';
 
 interface SystemHealth {
   status: 'healthy' | 'warning' | 'error';
@@ -142,44 +143,14 @@ export class WebSocketService {
   }
 
   private getTokenUsage(): TokenUsage {
-    let tokenLimit, tokenUsed, tokenWarn, tokenPanic;
+    const tokenInfo = getTokenUsage();
     
-    try {
-      tokenLimit = Number((this.db.prepare('SELECT value FROM settings WHERE key = "TOKEN_LIMIT"').get() as { value: string } | undefined)?.value || 100000);
-    } catch (error) {
-      console.warn('TOKEN_LIMIT setting not found, using default');
-      tokenLimit = 100000;
-    }
-    
-    try {
-      tokenUsed = Number((this.db.prepare('SELECT value FROM settings WHERE key = "TOKEN_USED"').get() as { value: string } | undefined)?.value || 0);
-    } catch (error) {
-      console.warn('TOKEN_USED setting not found, using default');
-      tokenUsed = 0;
-    }
-    
-    try {
-      tokenWarn = Number((this.db.prepare('SELECT value FROM settings WHERE key = "TOKEN_WARN"').get() as { value: string } | undefined)?.value || 0.8);
-    } catch (error) {
-      console.warn('TOKEN_WARN setting not found, using default');
-      tokenWarn = 0.8;
-    }
-    
-    try {
-      tokenPanic = Number((this.db.prepare('SELECT value FROM settings WHERE key = "TOKEN_PANIC"').get() as { value: string } | undefined)?.value || 0.95);
-    } catch (error) {
-      console.warn('TOKEN_PANIC setting not found, using default');
-      tokenPanic = 0.95;
-    }
-
-    const percentage = tokenUsed / tokenLimit;
-
     return {
-      used: tokenUsed,
-      limit: tokenLimit,
-      percentage,
-      warning: percentage >= tokenWarn,
-      panic: percentage >= tokenPanic
+      used: tokenInfo.used,
+      limit: tokenInfo.limit,
+      percentage: tokenInfo.percentage,
+      warning: tokenInfo.warning,
+      panic: tokenInfo.panic
     };
   }
 

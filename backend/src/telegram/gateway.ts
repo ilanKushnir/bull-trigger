@@ -111,4 +111,4 @@ export async function sendMessage(text: string, buttons?: any) {
 }
 
 // start directly when executed
-startTelegram(); 
+// startTelegram(); // Temporarily disabled to avoid bot conflict 

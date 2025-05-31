@@ -16,6 +16,7 @@ import { exportGraphDot } from './utils/graphUtils';
 import { initializeWebSocketService, websocketService } from './websocket/websocketService';
 import { strategyExecutionService } from './services/strategyExecutionService';
 import { strategyFlowService } from './services/strategyFlowService';
+import { resetTokenUsage } from './utils/settings';
 
 type FastifyType = import('fastify').FastifyInstance;
 
@@ -49,7 +50,7 @@ export const buildServer = async () => {
 
   await fastify.register(cors, {
     origin: process.env.NODE_ENV === 'development' 
-      ? ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:3000']
+      ? ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176', 'http://localhost:5177', 'http://localhost:3000', 'http://localhost:3001']
       : false,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -61,7 +62,7 @@ export const buildServer = async () => {
   // Manual CORS hook as fallback
   fastify.addHook('onRequest', async (request, reply) => {
     const origin = request.headers.origin;
-    const allowedOrigins = ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:3000'];
+    const allowedOrigins = ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176', 'http://localhost:5177', 'http://localhost:3000', 'http://localhost:3001'];
     
     if (origin && allowedOrigins.includes(origin)) {
       reply.header('Access-Control-Allow-Origin', origin);
@@ -222,17 +223,198 @@ export const buildServer = async () => {
   });
 
   fastify.put('/api/settings/tokenReset', async () => {
-    sqliteDb.prepare('UPDATE settings SET value = 0 WHERE key = "TOKEN_USED"').run();
+    try {
+      resetTokenUsage();
+      
+      // Broadcast token reset via WebSocket
+      websocketService?.broadcastTokenUpdate();
+      websocketService?.broadcastAlert({
+        type: 'info',
+        message: 'Token usage counter reset',
+        timestamp: new Date()
+      });
+      
+      return { ok: true };
+    } catch (error) {
+      console.error('Failed to reset token usage:', error);
+      return { error: 'Failed to reset token usage' };
+    }
+  });
+
+  // ===== SETTINGS MANAGEMENT ENDPOINTS =====
+  
+  // Get all settings
+  fastify.get('/api/settings', async () => {
+    try {
+      const settings = sqliteDb.prepare('SELECT key, value FROM settings ORDER BY key').all() as { key: string; value: string }[];
+      
+      // Convert to object format for easier frontend consumption
+      const settingsObj: Record<string, any> = {};
+      settings.forEach(({ key, value }) => {
+        // Try to parse JSON values, otherwise keep as string
+        try {
+          settingsObj[key] = JSON.parse(value);
+        } catch {
+          settingsObj[key] = value;
+        }
+      });
+      
+      return settingsObj;
+    } catch (error) {
+      console.error('Failed to fetch settings:', error);
+      return { error: 'Failed to fetch settings' };
+    }
+  });
+
+  // Get a specific setting
+  fastify.get<{ Params: { key: string } }>('/api/settings/:key', async (req) => {
+    const { key } = req.params;
     
-    // Broadcast token reset via WebSocket
-    websocketService?.broadcastTokenUpdate();
-    websocketService?.broadcastAlert({
-      type: 'info',
-      message: 'Token usage counter reset',
-      timestamp: new Date()
-    });
+    try {
+      const setting = sqliteDb.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
+      
+      if (!setting) {
+        return { error: 'Setting not found' };
+      }
+      
+      // Try to parse JSON value, otherwise return as string
+      try {
+        return { value: JSON.parse(setting.value) };
+      } catch {
+        return { value: setting.value };
+      }
+    } catch (error) {
+      console.error('Failed to fetch setting:', error);
+      return { error: 'Failed to fetch setting' };
+    }
+  });
+
+  // Update multiple settings
+  fastify.put('/api/settings', async (req) => {
+    const settings = req.body as Record<string, any>;
     
-    return { ok: true };
+    try {
+      const updateStmt = sqliteDb.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+      const transaction = sqliteDb.transaction((settingsToUpdate: Array<[string, any]>) => {
+        for (const [key, value] of settingsToUpdate) {
+          const serializedValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
+          updateStmt.run(key, serializedValue);
+        }
+      });
+      
+      transaction(Object.entries(settings));
+      
+      // Broadcast settings update via WebSocket
+      websocketService?.broadcastAlert({
+        type: 'info',
+        message: `Updated ${Object.keys(settings).length} system settings`,
+        timestamp: new Date()
+      });
+      
+      // If token settings were updated, broadcast token update
+      if (settings.TOKEN_LIMIT || settings.TOKEN_WARN || settings.TOKEN_PANIC) {
+        websocketService?.broadcastTokenUpdate();
+      }
+      
+      return { ok: true };
+    } catch (error) {
+      console.error('Failed to update settings:', error);
+      return { error: 'Failed to update settings' };
+    }
+  });
+
+  // Update a specific setting
+  fastify.put<{ Params: { key: string }; Body: { value: any } }>('/api/settings/:key', async (req) => {
+    const { key } = req.params;
+    const { value } = req.body;
+    
+    try {
+      const serializedValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
+      sqliteDb.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, serializedValue);
+      
+      // Broadcast setting update via WebSocket
+      websocketService?.broadcastAlert({
+        type: 'info',
+        message: `Updated setting: ${key}`,
+        timestamp: new Date()
+      });
+      
+      // If token setting was updated, broadcast token update
+      if (key.startsWith('TOKEN_')) {
+        websocketService?.broadcastTokenUpdate();
+      }
+      
+      return { ok: true };
+    } catch (error) {
+      console.error('Failed to update setting:', error);
+      return { error: 'Failed to update setting' };
+    }
+  });
+
+  // Delete a setting
+  fastify.delete<{ Params: { key: string } }>('/api/settings/:key', async (req) => {
+    const { key } = req.params;
+    
+    try {
+      sqliteDb.prepare('DELETE FROM settings WHERE key = ?').run(key);
+      
+      // Broadcast setting deletion via WebSocket
+      websocketService?.broadcastAlert({
+        type: 'warning',
+        message: `Deleted setting: ${key}`,
+        timestamp: new Date()
+      });
+      
+      return { ok: true };
+    } catch (error) {
+      console.error('Failed to delete setting:', error);
+      return { error: 'Failed to delete setting' };
+    }
+  });
+
+  // Reset all settings to defaults
+  fastify.post('/api/settings/reset', async () => {
+    try {
+      // Clear all existing settings
+      sqliteDb.prepare('DELETE FROM settings').run();
+      
+      // Re-initialize with defaults
+      ensureTokenSettings();
+      
+      // Add other default settings
+      const defaultSettings = [
+        ['MODEL_DEEP', 'o1'],
+        ['MODEL_CHEAP', 'gpt-4o-mini'],
+        ['TELEGRAM_CHAT_ID', '-1001234567890'],
+        ['SIGNAL_COOLDOWN', '30'],
+        ['HEARTBEAT_INTERVAL', '120'],
+        ['ENABLE_NOTIFICATIONS', 'true'],
+        ['AUTO_DISABLE_FAILING_STRATEGIES', 'false']
+      ];
+      
+      const insertStmt = sqliteDb.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+      const transaction = sqliteDb.transaction((settings: Array<[string, string]>) => {
+        for (const [key, value] of settings) {
+          insertStmt.run(key, value);
+        }
+      });
+      
+      transaction(defaultSettings);
+      
+      // Broadcast settings reset via WebSocket
+      websocketService?.broadcastAlert({
+        type: 'warning',
+        message: 'All settings reset to defaults',
+        timestamp: new Date()
+      });
+      
+      websocketService?.broadcastTokenUpdate();
+      
+      return { ok: true };
+    } catch (error) {
+      console.error('Failed to reset settings:', error);
+      return { error: 'Failed to reset settings' };
+    }
   });
 
   // Live signals endpoint with WebSocket broadcasting
@@ -596,23 +778,45 @@ export const buildServer = async () => {
 };
 
 function ensureTokenSettings() {
-  console.log('🔍 Checking database tables...');
-  try {
-    const tables = sqliteDb.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
-    console.log('🔍 Available tables:', tables);
-  } catch (error) {
-    console.error('🔍 Error listing tables:', error);
-  }
-  
-  const defaults = [
-    ['TOKEN_LIMIT','100000'],
-    ['TOKEN_USED','0'],
-    ['TOKEN_WARN','0.8'],
-    ['TOKEN_PANIC','0.95']
+  console.log('🔍 Initializing system settings...');
+
+  // Define all default settings
+  const defaultSettings = [
+    // Token management
+    ['TOKEN_LIMIT', '100000'],
+    ['TOKEN_USED', '0'],
+    ['TOKEN_WARN', '0.8'],
+    ['TOKEN_PANIC', '0.95'],
+    
+    // AI Models - Updated to latest 2024-2025 models
+    ['MODEL_DEEP', 'o1'],  // Advanced reasoning model for complex analysis
+    ['MODEL_CHEAP', 'gpt-4o-mini'],  // Latest efficient model for standard tasks
+    
+    // Telegram Integration
+    ['TELEGRAM_CHAT_ID', '-1001234567890'],
+    
+    // System Behavior
+    ['SIGNAL_COOLDOWN', '30'],
+    ['HEARTBEAT_INTERVAL', '120'],
+    ['ENABLE_NOTIFICATIONS', 'true'],
+    ['AUTO_DISABLE_FAILING_STRATEGIES', 'false'],
+    
+    // Application metadata
+    ['app_name', 'Bull Trigger'],
+    ['version', '1.0.0']
   ];
-  for (const [k,v] of defaults) {
-    sqliteDb.prepare('INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)').run(k,v);
-  }
+
+  // Insert all default settings (ignore conflicts for existing settings)
+  const insertStmt = sqliteDb.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
+  const transaction = sqliteDb.transaction((settings: Array<[string, string]>) => {
+    for (const [key, value] of settings) {
+      insertStmt.run(key, value);
+      console.log(`📝 Setting ${key} = ${value}`);
+    }
+  });
+
+  transaction(defaultSettings);
+  console.log('✅ System settings initialized');
 }
 
 export const start = async () => {

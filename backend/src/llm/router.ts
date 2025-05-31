@@ -1,25 +1,61 @@
 // @ts-nocheck
 import { ChatOpenAI } from '@langchain/openai';
-import Database from 'better-sqlite3';
-import path from 'path';
+import { getModel, getSetting, incrementTokenUsage } from '../utils/settings';
 
-const DB_FILE = process.env.DB_FILE || path.resolve(process.cwd(), 'database.sqlite');
-const sqlite = new Database(DB_FILE);
-
-function getSetting(key: string, fallback?: string): string | undefined {
-  const row = sqlite.prepare('SELECT value FROM settings WHERE key = ?').get(key);
-  return row?.value ?? fallback;
-}
-
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || getSetting('OPENAI_API_KEY');
 
 export function getLLM(type: 'deep' | 'cheap' = 'cheap') {
-  const modelName = type === 'deep'
-    ? getSetting('MODEL_DEEP', 'o3')
-    : getSetting('MODEL_CHEAP', 'gpt-4o-mini');
-  return new ChatOpenAI({
+  const modelName = getModel(type);
+  
+  const llm = new ChatOpenAI({
     temperature: 0.2,
     modelName,
-    openAIApiKey: OPENAI_API_KEY
+    openAIApiKey: OPENAI_API_KEY,
+    callbacks: [
+      {
+        handleLLMEnd: (output, runId) => {
+          // Track token usage from the API response
+          if (output.llmOutput?.tokenUsage) {
+            const totalTokens = output.llmOutput.tokenUsage.totalTokens || 0;
+            if (totalTokens > 0) {
+              incrementTokenUsage(totalTokens);
+              console.log(`🪙 Token usage tracked: ${totalTokens} tokens (${type} model)`);
+            }
+          }
+        },
+        handleLLMError: (error, runId) => {
+          console.error(`❌ LLM error (${type} model):`, error);
+        }
+      }
+    ]
   });
+  
+  return llm;
+}
+
+/**
+ * Call an LLM with a simple text prompt and return the response
+ */
+export async function callLLM(
+  prompt: string, 
+  type: 'deep' | 'cheap' = 'cheap',
+  systemPrompt?: string
+): Promise<string> {
+  const llm = getLLM(type);
+  
+  try {
+    let messages = [];
+    
+    if (systemPrompt) {
+      messages.push({ role: 'system', content: systemPrompt });
+    }
+    
+    messages.push({ role: 'user', content: prompt });
+    
+    const response = await llm.invoke(messages);
+    return response.content as string;
+  } catch (error) {
+    console.error(`Failed to call ${type} LLM:`, error);
+    throw error;
+  }
 } 
