@@ -108,7 +108,7 @@ export function ensureDefaultStrategies() {
     1
   );
   
-  // API Call 2: Get Fear & Greed Index
+  // API Call 2: Get Fear & Greed Index (parallel with BTC Price)
   sqlite.prepare(`INSERT INTO api_calls (strategy_id, name, url, method, json_path, output_variable, order_index, enabled) 
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
     btcStrategyId,
@@ -117,7 +117,7 @@ export function ensureDefaultStrategies() {
     'GET',
     '$.data[0].value',
     'fear_greed_index',
-    2,
+    1,
     1
   );
   
@@ -131,7 +131,7 @@ export function ensureDefaultStrategies() {
     'Based on the current BTC price and fear/greed index, provide a brief market analysis with key insights and potential trading signals. Keep it concise and actionable.',
     1,
     'market_analysis',
-    3,
+    2,
     1
   );
   
@@ -145,7 +145,7 @@ export function ensureDefaultStrategies() {
     0,
     'info',
     'Markdown',
-    4,
+    3,
     1
   );
   
@@ -157,7 +157,7 @@ export function ensureDefaultStrategies() {
     tipStrategyId,
     null,
     0,
-    5,
+    4,
     1
   );
   

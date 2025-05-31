@@ -20,6 +20,9 @@ import ReactFlow, {
   NodeTypes,
   Position,
   MarkerType,
+  ConnectionLineType,
+  BackgroundVariant,
+  Handle,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { 
@@ -35,7 +38,8 @@ import {
   XMarkIcon,
   CommandLineIcon as ConditionIcon,
   ArrowPathIcon as TriggerIcon,
-  PaperAirplaneIcon as TelegramIcon
+  PaperAirplaneIcon as TelegramIcon,
+  PlayCircleIcon as StartIcon
 } from '@heroicons/react/24/outline';
 
 interface StrategyFlowEditorProps {
@@ -107,9 +111,45 @@ interface TelegramMessageNode {
 }
 
 // Custom Node Components
+const StartNode = ({ data }: { data: any }) => {
+  return (
+    <div className="px-4 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg shadow-lg border-2 border-green-400 min-w-[120px]">
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="start-output"
+        className="!bg-green-300 !border-green-500 !w-3 !h-3"
+      />
+      <div className="flex items-center gap-2">
+        <div className="w-8 h-8 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+          </svg>
+        </div>
+        <div>
+          <div className="font-semibold text-sm">Start</div>
+          <div className="text-xs text-green-100">Strategy Trigger</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ApiCallNode = ({ data }: { data: any }) => {
   return (
-    <div className="px-3 py-2 shadow-lg rounded-lg bg-blue-600 border border-blue-500 min-w-[180px] max-w-[220px]">
+    <div className="px-4 py-3 bg-blue-500 text-white rounded-lg shadow-lg border-2 border-blue-400 min-w-[200px] max-w-[240px]">
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="api-input"
+        className="!bg-blue-300 !border-blue-500 !w-3 !h-3"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="api-output"
+        className="!bg-blue-300 !border-blue-500 !w-3 !h-3"
+      />
       <div className="flex items-center space-x-2 mb-1">
         <GlobeIcon className="w-3 h-3 text-blue-100" />
         <div className="font-medium text-white text-xs truncate">{data.name}</div>
@@ -122,16 +162,29 @@ const ApiCallNode = ({ data }: { data: any }) => {
         <div className="text-xs text-green-300 truncate">Extract: {data.jsonPath}</div>
       )}
       <div className="text-xs text-blue-200 mb-2 truncate">→ {data.outputVariable}</div>
+      
       <div className="flex justify-end space-x-1">
-        <Button size="sm" variant="outline" onClick={() => data.onEdit?.(data)} className="h-5 w-5 p-0">
-          <EditIcon className="w-2.5 h-2.5" />
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => data.onTest?.(data)} className="h-5 w-5 p-0">
-          <TestTubeIcon className="w-2.5 h-2.5" />
-        </Button>
-        <Button size="sm" variant="error" onClick={() => data.onDelete?.(data.id)} className="h-5 w-5 p-0">
-          <TrashIcon className="w-2.5 h-2.5" />
-        </Button>
+        <button 
+          onClick={() => data.onEdit?.(data)} 
+          className="w-6 h-6 rounded-full bg-blue-500 hover:bg-blue-400 flex items-center justify-center transition-colors group"
+          title="Edit"
+        >
+          <EditIcon className="w-3 h-3 text-white group-hover:text-blue-100" />
+        </button>
+        <button 
+          onClick={() => data.onTest?.(data)} 
+          className="w-6 h-6 rounded-full bg-green-500 hover:bg-green-400 flex items-center justify-center transition-colors group"
+          title="Test"
+        >
+          <TestTubeIcon className="w-3 h-3 text-white group-hover:text-green-100" />
+        </button>
+        <button 
+          onClick={() => data.onDelete?.(data.id)} 
+          className="w-6 h-6 rounded-full bg-red-500 hover:bg-red-400 flex items-center justify-center transition-colors group"
+          title="Delete"
+        >
+          <TrashIcon className="w-3 h-3 text-white group-hover:text-red-100" />
+        </button>
       </div>
     </div>
   );
@@ -139,7 +192,19 @@ const ApiCallNode = ({ data }: { data: any }) => {
 
 const ModelCallNode = ({ data }: { data: any }) => {
   return (
-    <div className="px-3 py-2 shadow-lg rounded-lg bg-purple-600 border border-purple-500 min-w-[180px] max-w-[220px]">
+    <div className="px-4 py-3 bg-purple-500 text-white rounded-lg shadow-lg border-2 border-purple-400 min-w-[200px] max-w-[240px]">
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="model-input"
+        className="!bg-purple-300 !border-purple-500 !w-3 !h-3"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="model-output"
+        className="!bg-purple-300 !border-purple-500 !w-3 !h-3"
+      />
       <div className="flex items-center space-x-2 mb-1">
         <BrainIcon className="w-3 h-3 text-purple-100" />
         <div className="font-medium text-white text-xs truncate">{data.name}</div>
@@ -152,13 +217,22 @@ const ModelCallNode = ({ data }: { data: any }) => {
         {data.includeApiData ? 'Includes API data' : 'No API data'}
       </div>
       <div className="text-xs text-purple-200 mb-2 truncate">→ {data.outputVariable}</div>
+      
       <div className="flex justify-end space-x-1">
-        <Button size="sm" variant="outline" onClick={() => data.onEdit?.(data)} className="h-5 w-5 p-0">
-          <EditIcon className="w-2.5 h-2.5" />
-        </Button>
-        <Button size="sm" variant="error" onClick={() => data.onDelete?.(data.id)} className="h-5 w-5 p-0">
-          <TrashIcon className="w-2.5 h-2.5" />
-        </Button>
+        <button 
+          onClick={() => data.onEdit?.(data)} 
+          className="w-6 h-6 rounded-full bg-purple-500 hover:bg-purple-400 flex items-center justify-center transition-colors group"
+          title="Edit"
+        >
+          <EditIcon className="w-3 h-3 text-white group-hover:text-purple-100" />
+        </button>
+        <button 
+          onClick={() => data.onDelete?.(data.id)} 
+          className="w-6 h-6 rounded-full bg-red-500 hover:bg-red-400 flex items-center justify-center transition-colors group"
+          title="Delete"
+        >
+          <TrashIcon className="w-3 h-3 text-white group-hover:text-red-100" />
+        </button>
       </div>
     </div>
   );
@@ -166,7 +240,19 @@ const ModelCallNode = ({ data }: { data: any }) => {
 
 const ConditionNode = ({ data }: { data: any }) => {
   return (
-    <div className="px-3 py-2 shadow-lg rounded-lg bg-yellow-600 border border-yellow-500 min-w-[180px] max-w-[220px]">
+    <div className="px-4 py-3 bg-yellow-500 text-white rounded-lg shadow-lg border-2 border-yellow-400 min-w-[200px] max-w-[240px]">
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="condition-input"
+        className="!bg-yellow-300 !border-yellow-500 !w-3 !h-3"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="condition-output"
+        className="!bg-yellow-300 !border-yellow-500 !w-3 !h-3"
+      />
       <div className="flex items-center space-x-2 mb-1">
         <ConditionIcon className="w-3 h-3 text-yellow-100" />
         <div className="font-medium text-white text-xs truncate">{data.name}</div>
@@ -181,13 +267,22 @@ const ConditionNode = ({ data }: { data: any }) => {
       <div className="text-xs text-yellow-200 mb-2 truncate">
         ✓ {data.trueOutputVariable || 'true'} | ✗ {data.falseOutputVariable || 'false'}
       </div>
+      
       <div className="flex justify-end space-x-1">
-        <Button size="sm" variant="outline" onClick={() => data.onEdit?.(data)} className="h-5 w-5 p-0">
-          <EditIcon className="w-2.5 h-2.5" />
-        </Button>
-        <Button size="sm" variant="error" onClick={() => data.onDelete?.(data.id)} className="h-5 w-5 p-0">
-          <TrashIcon className="w-2.5 h-2.5" />
-        </Button>
+        <button 
+          onClick={() => data.onEdit?.(data)} 
+          className="w-6 h-6 rounded-full bg-yellow-500 hover:bg-yellow-400 flex items-center justify-center transition-colors group"
+          title="Edit"
+        >
+          <EditIcon className="w-3 h-3 text-white group-hover:text-yellow-100" />
+        </button>
+        <button 
+          onClick={() => data.onDelete?.(data.id)} 
+          className="w-6 h-6 rounded-full bg-red-500 hover:bg-red-400 flex items-center justify-center transition-colors group"
+          title="Delete"
+        >
+          <TrashIcon className="w-3 h-3 text-white group-hover:text-red-100" />
+        </button>
       </div>
     </div>
   );
@@ -195,7 +290,19 @@ const ConditionNode = ({ data }: { data: any }) => {
 
 const StrategyTriggerNode = ({ data }: { data: any }) => {
   return (
-    <div className="px-3 py-2 shadow-lg rounded-lg bg-orange-600 border border-orange-500 min-w-[180px] max-w-[220px]">
+    <div className="px-4 py-3 bg-orange-500 text-white rounded-lg shadow-lg border-2 border-orange-400 min-w-[200px] max-w-[240px]">
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="trigger-input"
+        className="!bg-orange-300 !border-orange-500 !w-3 !h-3"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="trigger-output"
+        className="!bg-orange-300 !border-orange-500 !w-3 !h-3"
+      />
       <div className="flex items-center space-x-2 mb-1">
         <TriggerIcon className="w-3 h-3 text-orange-100" />
         <div className="font-medium text-white text-xs truncate">{data.name}</div>
@@ -205,18 +312,27 @@ const StrategyTriggerNode = ({ data }: { data: any }) => {
       </div>
       <div className="text-xs text-orange-100 mb-1">→ Strategy #{data.targetStrategyId}</div>
       <div className="text-xs text-orange-200 mb-1 truncate">
-        {data.conditionVariable ? `If: ${data.conditionVariable}` : 'Always trigger'}
+        {data.conditionVariable ? `Condition: ${data.conditionVariable}` : 'Always trigger'}
       </div>
       <div className="text-xs text-orange-200 mb-2 truncate">
         {data.waitForCompletion ? 'Wait for completion' : 'Fire & forget'}
       </div>
+      
       <div className="flex justify-end space-x-1">
-        <Button size="sm" variant="outline" onClick={() => data.onEdit?.(data)} className="h-5 w-5 p-0">
-          <EditIcon className="w-2.5 h-2.5" />
-        </Button>
-        <Button size="sm" variant="error" onClick={() => data.onDelete?.(data.id)} className="h-5 w-5 p-0">
-          <TrashIcon className="w-2.5 h-2.5" />
-        </Button>
+        <button 
+          onClick={() => data.onEdit?.(data)} 
+          className="w-6 h-6 rounded-full bg-orange-500 hover:bg-orange-400 flex items-center justify-center transition-colors group"
+          title="Edit"
+        >
+          <EditIcon className="w-3 h-3 text-white group-hover:text-orange-100" />
+        </button>
+        <button 
+          onClick={() => data.onDelete?.(data.id)} 
+          className="w-6 h-6 rounded-full bg-red-500 hover:bg-red-400 flex items-center justify-center transition-colors group"
+          title="Delete"
+        >
+          <TrashIcon className="w-3 h-3 text-white group-hover:text-red-100" />
+        </button>
       </div>
     </div>
   );
@@ -224,7 +340,19 @@ const StrategyTriggerNode = ({ data }: { data: any }) => {
 
 const TelegramMessageNode = ({ data }: { data: any }) => {
   return (
-    <div className="px-3 py-2 shadow-lg rounded-lg bg-green-600 border border-green-500 min-w-[180px] max-w-[220px]">
+    <div className="px-4 py-3 bg-green-600 text-white rounded-lg shadow-lg border-2 border-green-500 min-w-[200px] max-w-[240px]">
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="telegram-input"
+        className="!bg-green-300 !border-green-500 !w-3 !h-3"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="telegram-output"
+        className="!bg-green-300 !border-green-500 !w-3 !h-3"
+      />
       <div className="flex items-center space-x-2 mb-1">
         <TelegramIcon className="w-3 h-3 text-green-100" />
         <div className="font-medium text-white text-xs truncate">{data.name}</div>
@@ -232,18 +360,30 @@ const TelegramMessageNode = ({ data }: { data: any }) => {
           {data.enabled ? 'ON' : 'OFF'}
         </Badge>
       </div>
-      <div className="text-xs text-green-100 mb-1">#{data.chatId}</div>
-      <div className="text-xs text-green-200 mb-1 truncate">{data.messageType} message</div>
-      <div className="text-xs text-green-200 mb-2 truncate">
-        {data.onlyIfVariable ? `If: ${data.onlyIfVariable}` : 'Always send'}
+      <div className="text-xs text-green-100 mb-1 truncate">#{data.chatId}</div>
+      <div className="text-xs text-green-200 mb-1 truncate">
+        {data.includeApiData ? 'Includes API data' : 'Template only'}
       </div>
+      <div className="text-xs text-green-200 mb-2 truncate">
+        {data.messageType} message
+        {data.onlyIfVariable ? ` | If: ${data.onlyIfVariable}` : ' | Always send'}
+      </div>
+      
       <div className="flex justify-end space-x-1">
-        <Button size="sm" variant="outline" onClick={() => data.onEdit?.(data)} className="h-5 w-5 p-0">
-          <EditIcon className="w-2.5 h-2.5" />
-        </Button>
-        <Button size="sm" variant="error" onClick={() => data.onDelete?.(data.id)} className="h-5 w-5 p-0">
-          <TrashIcon className="w-2.5 h-2.5" />
-        </Button>
+        <button 
+          onClick={() => data.onEdit?.(data)} 
+          className="w-6 h-6 rounded-full bg-green-500 hover:bg-green-400 flex items-center justify-center transition-colors group"
+          title="Edit"
+        >
+          <EditIcon className="w-3 h-3 text-white group-hover:text-green-100" />
+        </button>
+        <button 
+          onClick={() => data.onDelete?.(data.id)} 
+          className="w-6 h-6 rounded-full bg-red-500 hover:bg-red-400 flex items-center justify-center transition-colors group"
+          title="Delete"
+        >
+          <TrashIcon className="w-3 h-3 text-white group-hover:text-red-100" />
+        </button>
       </div>
     </div>
   );
@@ -255,6 +395,14 @@ const nodeTypes: NodeTypes = {
   conditionNode: ConditionNode,
   strategyTrigger: StrategyTriggerNode,
   telegramMessage: TelegramMessageNode,
+  startNode: StartNode,
+};
+
+// Add edge styles
+const edgeOptions = {
+  animated: true,
+  style: { strokeWidth: 3 },
+  type: 'smoothstep',
 };
 
 export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlowEditorProps) {
@@ -295,6 +443,33 @@ export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlow
     updateFlowNodes();
   }, [apiCalls, modelCalls, conditionNodes, strategyTriggerNodes, telegramMessageNodes]);
 
+  // Debug edges
+  useEffect(() => {
+    console.log('🔗 Edges state updated:', edges.length, 'edges');
+    console.log('🔗 Current edges:', edges);
+  }, [edges]);
+
+  // Helper functions to get handle IDs for edges
+  const getSourceHandle = (nodeId: string): string => {
+    if (nodeId === 'start-node') return 'start-output';
+    if (nodeId.startsWith('api-')) return 'api-output';
+    if (nodeId.startsWith('model-')) return 'model-output';
+    if (nodeId.startsWith('condition-')) return 'condition-output';
+    if (nodeId.startsWith('trigger-')) return 'trigger-output';
+    if (nodeId.startsWith('telegram-')) return 'telegram-output';
+    return 'default-output';
+  };
+
+  const getTargetHandle = (nodeId: string): string => {
+    if (nodeId === 'start-node') return 'start-input';
+    if (nodeId.startsWith('api-')) return 'api-input';
+    if (nodeId.startsWith('model-')) return 'model-input';
+    if (nodeId.startsWith('condition-')) return 'condition-input';
+    if (nodeId.startsWith('trigger-')) return 'trigger-input';
+    if (nodeId.startsWith('telegram-')) return 'telegram-input';
+    return 'default-input';
+  };
+
   const updateFlowNodes = () => {
     const allSteps = [
       ...apiCalls.map(call => ({ ...call, type: 'api' as const })),
@@ -304,54 +479,253 @@ export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlow
       ...telegramMessageNodes.map(node => ({ ...node, type: 'telegram' as const }))
     ].sort((a, b) => a.orderIndex - b.orderIndex);
 
-    // More compact layout - arrange in a flowing line
-    const newNodes: Node[] = allSteps.map((step, index) => ({
-      id: `${step.type}-${step.id}`,
-      type: step.type === 'api' ? 'apiCall' : 
-            step.type === 'model' ? 'modelCall' :
-            step.type === 'condition' ? 'conditionNode' :
-            step.type === 'trigger' ? 'strategyTrigger' : 'telegramMessage',
-      position: { 
-        x: 50 + (index * 250), // Closer spacing between nodes
-        y: 50 + (index % 2) * 20 // Slight vertical offset for visual flow
-      },
+    console.log('🔗 updateFlowNodes called');
+    console.log('🔗 API calls:', apiCalls.length);
+    console.log('🔗 Model calls:', modelCalls.length);
+    console.log('🔗 All steps:', allSteps.map(s => ({ name: s.name, order: s.orderIndex, type: s.type })));
+
+    // Group steps by orderIndex to handle parallel execution
+    const stepGroups: { [orderIndex: number]: any[] } = {};
+    allSteps.forEach(step => {
+      if (!stepGroups[step.orderIndex]) {
+        stepGroups[step.orderIndex] = [];
+      }
+      stepGroups[step.orderIndex].push(step);
+    });
+
+    const orderedGroups = Object.keys(stepGroups)
+      .map(Number)
+      .sort((a, b) => a - b)
+      .map(orderIndex => ({ orderIndex, steps: stepGroups[orderIndex] }));
+
+    console.log('🔗 Ordered groups:', orderedGroups);
+
+    const newNodes: Node[] = [];
+    const newEdges: Edge[] = [];
+
+    // Add start node
+    const startNode: Node = {
+      id: 'start-node',
+      type: 'startNode',
+      position: { x: 50, y: 50 },
       data: {
-        ...step,
-        onEdit: step.type === 'api' ? setEditingApiCall : 
-                step.type === 'model' ? setEditingModelCall :
-                step.type === 'condition' ? setEditingConditionNode :
-                step.type === 'trigger' ? setEditingStrategyTriggerNode :
-                setEditingTelegramMessageNode,
-        onTest: step.type === 'api' ? handleTestApiCall : undefined,
-        onDelete: step.type === 'api' ? handleDeleteApiCall : 
-                  step.type === 'model' ? handleDeleteModelCall :
-                  step.type === 'condition' ? handleDeleteConditionNode :
-                  step.type === 'trigger' ? handleDeleteStrategyTriggerNode :
-                  handleDeleteTelegramMessageNode,
+        triggerType: 'cron',
+        cronExpression: '0 9 * * *'
       },
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
-    }));
+    };
+    newNodes.push(startNode);
+    console.log('🔗 Added start node');
 
-    // Create connections between consecutive nodes based on order
-    const newEdges: Edge[] = [];
-    for (let i = 0; i < newNodes.length - 1; i++) {
-      newEdges.push({
-        id: `edge-${i}`,
-        source: newNodes[i].id,
-        target: newNodes[i + 1].id,
-        type: 'smoothstep',
+    // Create nodes for each group with proper spacing for parallel execution
+    let previousGroupNodeIds: string[] = ['start-node'];
+    
+    orderedGroups.forEach((group, groupIndex) => {
+      const isParallel = group.steps.length > 1;
+      const currentGroupNodeIds: string[] = [];
+      
+      console.log(`🔗 Processing group ${groupIndex}: order=${group.orderIndex}, steps=${group.steps.length}, parallel=${isParallel}`);
+      
+      group.steps.forEach((step, stepIndex) => {
+        const nodeId = `${step.type}-${step.id}`;
+        currentGroupNodeIds.push(nodeId);
+        
+        // Calculate position for parallel nodes
+        const baseX = 300 + (groupIndex * 280);
+        const baseY = isParallel 
+          ? 50 + (stepIndex * 120) - ((group.steps.length - 1) * 60) // Center parallel nodes vertically
+          : 50;
+
+        const node: Node = {
+          id: nodeId,
+          type: step.type === 'api' ? 'apiCall' : 
+                step.type === 'model' ? 'modelCall' :
+                step.type === 'condition' ? 'conditionNode' :
+                step.type === 'trigger' ? 'strategyTrigger' : 'telegramMessage',
+          position: { x: baseX, y: baseY },
+          data: {
+            ...step,
+            isParallel: isParallel,
+            parallelGroup: group.orderIndex,
+            onEdit: step.type === 'api' ? setEditingApiCall : 
+                    step.type === 'model' ? setEditingModelCall :
+                    step.type === 'condition' ? setEditingConditionNode :
+                    step.type === 'trigger' ? setEditingStrategyTriggerNode :
+                    setEditingTelegramMessageNode,
+            onTest: step.type === 'api' ? handleTestApiCall : undefined,
+            onDelete: step.type === 'api' ? handleDeleteApiCall : 
+                      step.type === 'model' ? handleDeleteModelCall :
+                      step.type === 'condition' ? handleDeleteConditionNode :
+                      step.type === 'trigger' ? handleDeleteStrategyTriggerNode :
+                      handleDeleteTelegramMessageNode,
+          },
+          sourcePosition: Position.Right,
+          targetPosition: Position.Left,
+        };
+        
+        newNodes.push(node);
+        console.log(`🔗 Created node: ${nodeId} at (${baseX}, ${baseY})`);
+      });
+
+      // Create edges from previous group to current group
+      console.log(`🔗 Creating edges from [${previousGroupNodeIds}] to [${currentGroupNodeIds}]`);
+      
+      if (isParallel) {
+        // For parallel execution, connect from previous group to all parallel nodes
+        previousGroupNodeIds.forEach(prevNodeId => {
+          currentGroupNodeIds.forEach(currNodeId => {
+            const edgeId = `edge-${prevNodeId}-${currNodeId}`;
+            const edge: Edge = {
+              id: edgeId,
+              source: prevNodeId,
+              target: currNodeId,
+              sourceHandle: getSourceHandle(prevNodeId),
+              targetHandle: getTargetHandle(currNodeId),
+              type: 'smoothstep',
+              animated: true,
+              style: { 
+                stroke: '#3b82f6', 
+                strokeWidth: 6,  // Make thicker for visibility
+                zIndex: 1000,    // Force on top
+              },
+              markerEnd: {
+                type: MarkerType.ArrowClosed,
+                color: '#3b82f6',
+                width: 8,
+                height: 8,
+              },
+              label: 'Parallel',
+              labelStyle: { 
+                fill: '#3b82f6', 
+                fontWeight: 600,
+                fontSize: '12px',
+              },
+              labelBgStyle: { 
+                fill: '#1e293b', 
+                fillOpacity: 0.8,
+              },
+            };
+            newEdges.push(edge);
+            console.log(`🔗 Created parallel edge: ${edgeId}`);
+          });
+        });
+      } else {
+        // For sequential execution, connect from previous group to single node
+        const currNodeId = currentGroupNodeIds[0];
+        if (previousGroupNodeIds.length === 1) {
+          // Previous was sequential
+          const edgeId = `edge-${previousGroupNodeIds[0]}-${currNodeId}`;
+          const edge: Edge = {
+            id: edgeId,
+            source: previousGroupNodeIds[0],
+            target: currNodeId,
+            sourceHandle: getSourceHandle(previousGroupNodeIds[0]),
+            targetHandle: getTargetHandle(currNodeId),
+            type: 'smoothstep',
+            animated: true,
+            style: { 
+              stroke: '#10b981', 
+              strokeWidth: 6,  // Make thicker for visibility
+              zIndex: 1000,    // Force on top
+            },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: '#10b981',
+              width: 8,
+              height: 8,
+            },
+            label: 'Next',
+            labelStyle: { 
+              fill: '#10b981', 
+              fontWeight: 600,
+              fontSize: '12px',
+            },
+            labelBgStyle: { 
+              fill: '#1e293b', 
+              fillOpacity: 0.8,
+            },
+          };
+          newEdges.push(edge);
+          console.log(`🔗 Created sequential edge: ${edgeId}`);
+        } else {
+          // Previous was parallel, converge to single node
+          previousGroupNodeIds.forEach(prevNodeId => {
+            const edgeId = `edge-${prevNodeId}-${currNodeId}`;
+            const edge: Edge = {
+              id: edgeId,
+              source: prevNodeId,
+              target: currNodeId,
+              sourceHandle: getSourceHandle(prevNodeId),
+              targetHandle: getTargetHandle(currNodeId),
+              type: 'smoothstep',
+              animated: true,
+              style: { 
+                stroke: '#f59e0b', 
+                strokeWidth: 6,  // Make thicker for visibility
+                zIndex: 1000,    // Force on top
+              },
+              markerEnd: {
+                type: MarkerType.ArrowClosed,
+                color: '#f59e0b',
+                width: 8,
+                height: 8,
+              },
+              label: 'Converge',
+              labelStyle: { 
+                fill: '#f59e0b', 
+                fontWeight: 600,
+                fontSize: '12px',
+              },
+              labelBgStyle: { 
+                fill: '#1e293b', 
+                fillOpacity: 0.8,
+              },
+            };
+            newEdges.push(edge);
+            console.log(`🔗 Created convergence edge: ${edgeId}`);
+          });
+        }
+      }
+
+      previousGroupNodeIds = currentGroupNodeIds;
+    });
+
+    // Add a test edge if no other edges were created
+    if (newEdges.length === 0 && newNodes.length > 1) {
+      console.log('🔗 No edges created, adding test edge');
+      const testEdge: Edge = {
+        id: 'test-edge',
+        source: 'start-node',
+        target: newNodes[1].id,
+        sourceHandle: getSourceHandle('start-node'),
+        targetHandle: getTargetHandle(newNodes[1].id),
+        type: 'straight',
         animated: true,
         style: { 
-          stroke: '#10b981', 
-          strokeWidth: 2,
+          stroke: '#ff0000', 
+          strokeWidth: 10,
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: '#10b981',
+          color: '#ff0000',
+          width: 40,
+          height: 40,
         },
-      });
+        label: 'TEST EDGE',
+        labelStyle: { 
+          fill: '#ff0000', 
+          fontWeight: 800,
+          fontSize: '16px',
+        },
+      };
+      newEdges.push(testEdge);
     }
+
+    console.log('🔗 FINAL RESULT:');
+    console.log('🔗 Created nodes:', newNodes.length);
+    console.log('🔗 Created edges:', newEdges.length);
+    console.log('🔗 Edges details:', newEdges.map(e => ({ id: e.id, source: e.source, target: e.target, style: e.style })));
 
     setNodes(newNodes);
     setEdges(newEdges);
@@ -360,6 +734,9 @@ export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlow
   const loadStrategyFlow = async () => {
     setLoading(true);
     try {
+      console.log('🔗 === LOADING STRATEGY FLOW ===');
+      console.log('🔗 Strategy ID:', strategyId);
+      
       const [
         apiCallsResult, 
         modelCallsResult, 
@@ -374,27 +751,51 @@ export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlow
         api.getTelegramMessageNodes(strategyId)
       ]);
       
+      console.log('🔗 Raw API responses:');
+      console.log('🔗 API calls result:', apiCallsResult);
+      console.log('🔗 Model calls result:', modelCallsResult);
+      console.log('🔗 Condition nodes result:', conditionNodesResult);
+      console.log('🔗 Strategy trigger nodes result:', strategyTriggerNodesResult);
+      console.log('🔗 Telegram message nodes result:', telegramMessageNodesResult);
+      
       if (apiCallsResult.success) {
+        console.log('🔗 Setting API calls:', apiCallsResult.data);
         setApiCalls(apiCallsResult.data || []);
+      } else {
+        console.error('🔗 Failed to load API calls:', apiCallsResult.error);
       }
       
       if (modelCallsResult.success) {
+        console.log('🔗 Setting model calls:', modelCallsResult.data);
         setModelCalls(modelCallsResult.data || []);
+      } else {
+        console.error('🔗 Failed to load model calls:', modelCallsResult.error);
       }
 
       if (conditionNodesResult.success) {
+        console.log('🔗 Setting condition nodes:', conditionNodesResult.data);
         setConditionNodes(conditionNodesResult.data || []);
+      } else {
+        console.error('🔗 Failed to load condition nodes:', conditionNodesResult.error);
       }
 
       if (strategyTriggerNodesResult.success) {
+        console.log('🔗 Setting strategy trigger nodes:', strategyTriggerNodesResult.data);
         setStrategyTriggerNodes(strategyTriggerNodesResult.data || []);
+      } else {
+        console.error('🔗 Failed to load strategy trigger nodes:', strategyTriggerNodesResult.error);
       }
 
       if (telegramMessageNodesResult.success) {
+        console.log('🔗 Setting telegram message nodes:', telegramMessageNodesResult.data);
         setTelegramMessageNodes(telegramMessageNodesResult.data || []);
+      } else {
+        console.error('🔗 Failed to load telegram message nodes:', telegramMessageNodesResult.error);
       }
+      
+      console.log('🔗 === LOADING COMPLETE ===');
     } catch (error) {
-      console.error('Failed to load strategy flow:', error);
+      console.error('🔗 Exception while loading strategy flow:', error);
     }
     setLoading(false);
   };
@@ -595,7 +996,7 @@ export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlow
           </div>
         </div>
 
-        <div className="h-96 bg-gray-900 rounded-lg border border-gray-700">
+        <div className="h-96 bg-gray-900 rounded-lg border border-gray-700 relative overflow-hidden">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -603,13 +1004,25 @@ export default function StrategyFlowEditor({ strategyId, onClose }: StrategyFlow
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             nodeTypes={nodeTypes}
+            defaultEdgeOptions={edgeOptions}
             fitView
-            fitViewOptions={{ padding: 0.2 }}
-            defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+            fitViewOptions={{ padding: 0.2, minZoom: 0.5, maxZoom: 2 }}
+            defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
             className="bg-gray-900"
+            connectionLineStyle={{ stroke: '#ffffff', strokeWidth: 2 }}
+            connectionLineType={ConnectionLineType.SmoothStep}
+            proOptions={{ hideAttribution: true }}
+            elementsSelectable={true}
+            nodesConnectable={true}
+            nodesDraggable={true}
+            zoomOnScroll={true}
+            panOnScroll={false}
+            selectNodesOnDrag={false}
+            snapToGrid={true}
+            snapGrid={[15, 15]}
           >
-            <Controls className="bg-gray-800 border border-gray-600" />
-            <Background color="#374151" gap={16} />
+            <Controls className="bg-gray-800 border border-gray-600 text-white" />
+            <Background color="#374151" gap={16} variant={BackgroundVariant.Dots} />
           </ReactFlow>
         </div>
 

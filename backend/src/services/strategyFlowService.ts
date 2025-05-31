@@ -546,67 +546,86 @@ export class StrategyFlowService {
       const strategyTriggerNodes = this.getStrategyTriggerNodesByStrategy(strategyId);
       const telegramMessageNodes = this.getTelegramMessageNodesByStrategy(strategyId);
       
-      // Combine and sort by order index
+      // Combine all steps
       const allSteps = [
         ...apiCalls.map(call => ({ ...call, type: 'api_call' as const })),
         ...modelCalls.map(call => ({ ...call, type: 'model_call' as const })),
         ...conditionNodes.map(node => ({ ...node, type: 'condition_node' as const })),
         ...strategyTriggerNodes.map(node => ({ ...node, type: 'strategy_trigger_node' as const })),
         ...telegramMessageNodes.map(node => ({ ...node, type: 'telegram_message_node' as const }))
-      ].sort((a, b) => a.orderIndex - b.orderIndex);
-      
-      // Execute each step in order
-      for (const step of allSteps) {
-        if (!step.enabled) continue;
-        
-        const startTime = Date.now();
-        let stepResult;
-        let stepError;
-        
-        try {
-          if (step.type === 'api_call') {
-            stepResult = await this.executeApiCall(step as ApiCall, variables);
-            variables[step.outputVariable] = stepResult;
-          } else if (step.type === 'model_call') {
-            stepResult = await this.executeModelCall(step as ModelCall, variables);
-            variables[step.outputVariable] = stepResult;
-          } else if (step.type === 'condition_node') {
-            stepResult = await this.executeConditionNode(step as ConditionNode, variables);
-            // Condition nodes set their output variables internally
-          } else if (step.type === 'strategy_trigger_node') {
-            stepResult = await this.executeStrategyTriggerNode(step as StrategyTriggerNode, variables);
-            if (step.outputVariable && stepResult) {
-              variables[step.outputVariable] = stepResult;
-            }
-          } else if (step.type === 'telegram_message_node') {
-            stepResult = await this.executeTelegramMessageNode(step as TelegramMessageNode, variables);
+      ];
+
+      // Group steps by orderIndex for parallel execution
+      const stepGroups: { [orderIndex: number]: any[] } = {};
+      allSteps.forEach(step => {
+        if (step.enabled) {
+          if (!stepGroups[step.orderIndex]) {
+            stepGroups[step.orderIndex] = [];
           }
-        } catch (error) {
-          stepError = error instanceof Error ? error.message : 'Unknown error';
-          console.error(`Step ${step.name} failed:`, error);
+          stepGroups[step.orderIndex].push(step);
         }
+      });
+
+      // Execute step groups in order, with parallel execution within each group
+      const orderedIndices = Object.keys(stepGroups).map(Number).sort((a, b) => a - b);
+      
+      for (const orderIndex of orderedIndices) {
+        const group = stepGroups[orderIndex];
+        console.log(`[Flow Execution] Executing group ${orderIndex} with ${group.length} steps ${group.length > 1 ? 'in parallel' : 'sequentially'}`);
         
-        const duration = Date.now() - startTime;
+        // Execute all steps in this group in parallel
+        const groupPromises = group.map(async (step) => {
+          const startTime = Date.now();
+          let stepResult;
+          let stepError;
+          
+          try {
+            if (step.type === 'api_call') {
+              stepResult = await this.executeApiCall(step as ApiCall, variables);
+              variables[step.outputVariable] = stepResult;
+            } else if (step.type === 'model_call') {
+              stepResult = await this.executeModelCall(step as ModelCall, variables);
+              variables[step.outputVariable] = stepResult;
+            } else if (step.type === 'condition_node') {
+              stepResult = await this.executeConditionNode(step as ConditionNode, variables);
+              // Condition nodes set their output variables internally
+            } else if (step.type === 'strategy_trigger_node') {
+              stepResult = await this.executeStrategyTriggerNode(step as StrategyTriggerNode, variables);
+              if (step.outputVariable && stepResult) {
+                variables[step.outputVariable] = stepResult;
+              }
+            } else if (step.type === 'telegram_message_node') {
+              stepResult = await this.executeTelegramMessageNode(step as TelegramMessageNode, variables);
+            }
+          } catch (error) {
+            stepError = error instanceof Error ? error.message : 'Unknown error';
+            console.error(`Step ${step.name} failed:`, error);
+            throw error; // Re-throw to stop execution
+          }
+          
+          const duration = Date.now() - startTime;
+          
+          const log: FlowExecutionLog = {
+            stepType: step.type as any,
+            stepId: step.id,
+            stepName: step.name,
+            input: this.getStepInput(step),
+            output: stepResult,
+            error: stepError,
+            duration
+          };
+          
+          return log;
+        });
+
+        // Wait for all steps in this group to complete
+        const groupLogs = await Promise.all(groupPromises);
+        logs.push(...groupLogs);
         
-        const log: FlowExecutionLog = {
-          stepType: step.type as any,
-          stepId: step.id,
-          stepName: step.name,
-          input: this.getStepInput(step),
-          output: stepResult,
-          error: stepError,
-          duration
-        };
+        // Save logs to database
+        groupLogs.forEach(log => this.saveExecutionLog(executionId, log));
         
-        logs.push(log);
-        
-        // Save log to database
-        this.saveExecutionLog(executionId, log);
-        
-        // If step failed and it's critical, stop execution
-        if (stepError) {
-          throw new Error(`Step "${step.name}" failed: ${stepError}`);
-        }
+        console.log(`[Flow Execution] Group ${orderIndex} completed successfully`);
       }
       
       return {

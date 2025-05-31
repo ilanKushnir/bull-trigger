@@ -91,7 +91,7 @@ class ApiService {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001';
+    this.baseUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000';
   }
 
   private async request<T>(
@@ -382,7 +382,7 @@ class WebSocketClient {
   private reconnectDelay = 1000;
   private listeners: Map<string, EventCallback[]> = new Map();
 
-  public connect(url: string = 'http://localhost:3001'): void {
+  public connect(url: string = 'http://localhost:3000'): void {
     if (this.socket?.connected) {
       console.log('🔌 WebSocket already connected');
       return;
