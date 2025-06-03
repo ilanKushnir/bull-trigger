@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 export const migrations = sqliteTable('_migrations', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -64,7 +64,8 @@ export const apiCalls = sqliteTable('api_calls', {
   jsonPath: text('json_path'), // JSON path to extract data (e.g., "data.price")
   outputVariable: text('output_variable').notNull(), // Variable name to store result
   orderIndex: integer('order_index').notNull(),
-  enabled: integer('enabled', { mode: 'boolean' }).default(true).notNull()
+  enabled: integer('enabled', { mode: 'boolean' }).default(true).notNull(),
+  castToNumber: integer('cast_to_number', { mode: 'boolean' }).default(false).notNull() // Cast result to number
 });
 
 export const modelCalls = sqliteTable('model_calls', {
@@ -135,9 +136,21 @@ export const strategyNodesTelegram = sqliteTable('strategy_nodes_telegram', {
 
 export const signals = sqliteTable('signals', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  name: text('name').notNull().unique(),
-  description: text('description'),
-  enabled: integer('enabled', { mode: 'boolean' }).default(true).notNull(),
-  cron: text('cron').default('*/5 * * * *'),
-  triggers: text('triggers')
+  signalType: text('signal_type', { enum: ['LONG', 'SHORT'] }).notNull(),
+  symbol: text('symbol').notNull(),
+  riskLevel: text('risk_level', { enum: ['Low', 'Medium', 'High'] }).notNull(),
+  confidence: integer('confidence').notNull(),
+  entryPriceMin: real('entry_price_min').notNull(),
+  entryPriceMax: real('entry_price_max').notNull(),
+  leverage: real('leverage').notNull().default(1),
+  tp1: real('tp1'),
+  tp2: real('tp2'),
+  tp3: real('tp3'),
+  stopLoss: real('stop_loss').notNull(),
+  strategyName: text('strategy_name').notNull(),
+  note: text('note'),
+  signalTag: text('signal_tag'),
+  status: text('status', { enum: ['active', 'closed', 'cancelled'] }).notNull().default('active'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`)
 });

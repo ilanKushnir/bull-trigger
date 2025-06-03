@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "sqlite": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sqlite",
+        "database.sqlite"
+      ],
+      "cwd": "/Users/ilankushnir/Desktop/bull-trigger",
+      "env": {}
+    },
+    "sqlite-backend": {
+      "command": "npx", 
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sqlite",
+        "backend/database.sqlite"
+      ],
+      "cwd": "/Users/ilankushnir/Desktop/bull-trigger",
+      "env": {}
+    }
+  }
+} 

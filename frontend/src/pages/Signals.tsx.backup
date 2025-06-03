@@ -42,8 +42,7 @@ export default function Signals() {
       const result = await api.getSignals(filtersToApply);
       
       if (result.success && result.data) {
-        const signalsData = Array.isArray(result.data) ? result.data : [];
-        setSignals(signalsData);
+        setSignals(result.data);
       } else {
         console.error('Failed to fetch signals:', result.error);
         setSignals([]);
@@ -55,7 +54,6 @@ export default function Signals() {
         setStats(statsResult.data);
       }
     } catch (error) {
-      setSignals([]);
       console.error('Error fetching signals:', error);
     } finally {
       setLoading(false);
@@ -137,9 +135,7 @@ export default function Signals() {
     return `$${price.toLocaleString()}`;
   };
 
-  const safeSignals = Array.isArray(signals) ? signals : [];
-  const filteredSignals = safeSignals.filter(signal => {
-    if (!signal || !signal.symbol || !signal.strategyName) return false;
+  const filteredSignals = signals.filter(signal => {
     const matchesSearch = signal.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          signal.strategyName.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSearch;

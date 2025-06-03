@@ -22,6 +22,7 @@ export interface ApiCall {
   outputVariable: string;
   orderIndex: number;
   enabled: boolean;
+  castToNumber?: boolean; // Cast extracted value to number
 }
 
 export interface ModelCall {
@@ -101,8 +102,8 @@ export class StrategyFlowService {
   
   async createApiCall(strategyId: number, apiCallData: any): Promise<number> {
     const query = `
-      INSERT INTO api_calls (strategy_id, name, url, method, headers, body, json_path, output_variable, order_index, enabled)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO api_calls (strategy_id, name, url, method, headers, body, json_path, output_variable, order_index, enabled, cast_to_number)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     const values = [
       strategyId,
@@ -114,7 +115,8 @@ export class StrategyFlowService {
       apiCallData.jsonPath || null,
       apiCallData.outputVariable,
       apiCallData.orderIndex || 0,
-      apiCallData.enabled ? 1 : 0
+      apiCallData.enabled ? 1 : 0,
+      apiCallData.castToNumber ? 1 : 0
     ];
     
     try {
@@ -143,7 +145,8 @@ export class StrategyFlowService {
         jsonPath: 'json_path',
         outputVariable: 'output_variable',
         orderIndex: 'order_index',
-        enabled: 'enabled'
+        enabled: 'enabled',
+        castToNumber: 'cast_to_number'
       };
       
       Object.entries(apiCallData).forEach(([key, value]) => {
@@ -153,6 +156,8 @@ export class StrategyFlowService {
           fields.push(`${dbField} = ?`);
           // Convert boolean values to integers for SQLite
           if (key === 'enabled') {
+            values.push(value ? 1 : 0);
+          } else if (key === 'castToNumber') {
             values.push(value ? 1 : 0);
           } else if (key === 'headers' && value) {
             values.push(typeof value === 'string' ? value : JSON.stringify(value));
@@ -195,7 +200,8 @@ export class StrategyFlowService {
         json_path as jsonPath, 
         output_variable as outputVariable, 
         order_index as orderIndex, 
-        enabled 
+        enabled,
+        cast_to_number as castToNumber
       FROM api_calls 
       WHERE strategy_id = ? 
       ORDER BY order_index ASC
@@ -203,7 +209,8 @@ export class StrategyFlowService {
     
     return rows.map(row => ({
       ...row,
-      enabled: Boolean(row.enabled)
+      enabled: Boolean(row.enabled),
+      castToNumber: Boolean(row.castToNumber)
     })) as ApiCall[];
   }
 
@@ -589,105 +596,19 @@ export class StrategyFlowService {
     const logs: FlowExecutionLog[] = [];
     
     try {
-      // Get all flow nodes for this strategy
-      const apiCalls = this.getApiCallsByStrategy(strategyId);
-      const modelCalls = this.getModelCallsByStrategy(strategyId);
-      const conditionNodes = this.getConditionNodesByStrategy(strategyId);
-      const strategyTriggerNodes = this.getStrategyTriggerNodesByStrategy(strategyId);
-      const telegramMessageNodes = this.getTelegramMessageNodesByStrategy(strategyId);
+      // Check if this strategy has flow edges (new flow-based approach)
+      const flowEdges = this.getFlowEdges(strategyId);
+      console.log(`🔍 Strategy ${strategyId}: Found ${flowEdges.length} flow edges`);
       
-      // Combine all steps
-      const allSteps = [
-        ...apiCalls.map(call => ({ ...call, type: 'api_call' as const })),
-        ...modelCalls.map(call => ({ ...call, type: 'model_call' as const })),
-        ...conditionNodes.map(node => ({ ...node, type: 'condition_node' as const })),
-        ...strategyTriggerNodes.map(node => ({ ...node, type: 'strategy_trigger_node' as const })),
-        ...telegramMessageNodes.map(node => ({ ...node, type: 'telegram_message_node' as const }))
-      ];
-
-      // Group steps by orderIndex for parallel execution
-      const stepGroups: { [orderIndex: number]: any[] } = {};
-      allSteps.forEach(step => {
-        if (step.enabled) {
-          if (!stepGroups[step.orderIndex]) {
-            stepGroups[step.orderIndex] = [];
-          }
-          stepGroups[step.orderIndex].push(step);
-        }
-      });
-
-      // Execute step groups in order, with parallel execution within each group
-      const orderedIndices = Object.keys(stepGroups).map(Number).sort((a, b) => a - b);
-      
-      for (const orderIndex of orderedIndices) {
-        const group = stepGroups[orderIndex];
-        
-        // Execute all steps in this group in parallel
-        const groupPromises = group.map(async (step) => {
-          const startTime = Date.now();
-          let stepResult;
-          let stepError;
-          
-          // Get emoji for step type
-          const stepEmoji = this.getStepEmoji(step.type);
-          
-          try {
-            if (step.type === 'api_call') {
-              stepResult = await this.executeApiCall(step as ApiCall, variables);
-              variables[step.outputVariable] = stepResult;
-            } else if (step.type === 'model_call') {
-              stepResult = await this.executeModelCall(step as ModelCall, variables);
-              variables[step.outputVariable] = stepResult;
-            } else if (step.type === 'condition_node') {
-              stepResult = await this.executeConditionNode(step as ConditionNode, variables);
-              // Condition nodes set their output variables internally
-            } else if (step.type === 'strategy_trigger_node') {
-              stepResult = await this.executeStrategyTriggerNode(step as StrategyTriggerNode, variables);
-              if (step.outputVariable && stepResult) {
-                variables[step.outputVariable] = stepResult;
-              }
-            } else if (step.type === 'telegram_message_node') {
-              stepResult = await this.executeTelegramMessageNode(step as TelegramMessageNode, variables);
-            }
-            
-            const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-            console.log(`  ${stepEmoji} ${step.name} (${duration}s)`);
-            
-          } catch (error) {
-            stepError = error instanceof Error ? error.message : 'Unknown error';
-            const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-            console.error(`  ❌ ${step.name} failed: ${stepError} (${duration}s)`);
-            throw error; // Re-throw to stop execution
-          }
-          
-          const duration = Date.now() - startTime;
-          
-          const log: FlowExecutionLog = {
-            stepType: step.type as any,
-            stepId: step.id,
-            stepName: step.name,
-            input: this.getStepInput(step),
-            output: stepResult,
-            error: stepError,
-            duration
-          };
-          
-          return log;
-        });
-
-        // Wait for all steps in this group to complete
-        const groupLogs = await Promise.all(groupPromises);
-        logs.push(...groupLogs);
-        
-        // Save logs to database
-        groupLogs.forEach(log => this.saveExecutionLog(executionId, log));
+      if (flowEdges.length > 0) {
+        console.log(`🚀 Using flow-based execution for strategy ${strategyId}`);
+        // Use new flow-based execution
+        return await this.executeFlowBasedStrategy(strategyId, executionId, variables, logs);
+      } else {
+        console.log(`⚠️ Using legacy order-based execution for strategy ${strategyId}`);
+        // Fallback to legacy order-based execution for older strategies
+        return await this.executeLegacyOrderBasedStrategy(strategyId, executionId, variables, logs);
       }
-      
-      return {
-        success: true,
-        variables,
-        logs
-      };
       
     } catch (error) {
       return {
@@ -697,6 +618,324 @@ export class StrategyFlowService {
         error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
+  }
+
+  private getFlowEdges(strategyId: number): any[] {
+    return db.prepare(`
+      SELECT * FROM flow_edges 
+      WHERE strategy_id = ? 
+      ORDER BY created_at
+    `).all(strategyId);
+  }
+
+  private async executeFlowBasedStrategy(strategyId: number, executionId: number, variables: Record<string, any>, logs: FlowExecutionLog[]): Promise<FlowExecutionResult> {
+    // Get all flow nodes for this strategy
+    const apiCalls = this.getApiCallsByStrategy(strategyId);
+    const modelCalls = this.getModelCallsByStrategy(strategyId);
+    const conditionNodes = this.getConditionNodesByStrategy(strategyId);
+    const strategyTriggerNodes = this.getStrategyTriggerNodesByStrategy(strategyId);
+    const telegramMessageNodes = this.getTelegramMessageNodesByStrategy(strategyId);
+    
+    console.log(`📊 Strategy ${strategyId} nodes: ${apiCalls.length} API, ${modelCalls.length} model, ${conditionNodes.length} condition, ${strategyTriggerNodes.length} trigger, ${telegramMessageNodes.length} telegram`);
+    
+    // Create a map of all nodes by their IDs
+    const allNodes = new Map<string, any>();
+    
+    // Add nodes with their flow node IDs
+    apiCalls.forEach(node => allNodes.set(`api_call_${node.id}`, { ...node, type: 'api_call' }));
+    modelCalls.forEach(node => allNodes.set(`model_call_${node.id}`, { ...node, type: 'model_call' }));
+    conditionNodes.forEach(node => allNodes.set(`condition_node_${node.id}`, { ...node, type: 'condition_node' }));
+    strategyTriggerNodes.forEach(node => allNodes.set(`strategy_trigger_node_${node.id}`, { ...node, type: 'strategy_trigger_node' }));
+    telegramMessageNodes.forEach(node => allNodes.set(`telegram_message_node_${node.id}`, { ...node, type: 'telegram_message_node' }));
+    
+    console.log(`🗂️ All nodes mapped: ${Array.from(allNodes.keys()).join(', ')}`);
+    
+    // Get flow edges
+    const flowEdges = this.getFlowEdges(strategyId);
+    console.log(`🔗 Flow edges:`, flowEdges.map(e => `${e.source_node_id}:${e.source_handle} → ${e.target_node_id}`));
+    
+    // Build adjacency map for efficient traversal
+    const edgeMap = new Map<string, any[]>();
+    flowEdges.forEach(edge => {
+      const sourceKey = `${edge.source_node_id}:${edge.source_handle || 'default'}`;
+      if (!edgeMap.has(sourceKey)) {
+        edgeMap.set(sourceKey, []);
+      }
+      edgeMap.get(sourceKey)!.push(edge);
+    });
+    
+    console.log(`🎯 Edge map:`, Array.from(edgeMap.entries()).map(([key, edges]) => `${key} → [${edges.map(e => e.target_node_id).join(', ')}]`));
+    
+    // Track executed nodes to prevent cycles
+    const executedNodes = new Set<string>();
+    const executionQueue: string[] = [];
+    
+    // Find start node or first nodes (nodes that have no incoming edges)
+    const hasIncomingEdge = new Set<string>();
+    flowEdges.forEach(edge => hasIncomingEdge.add(edge.target_node_id));
+    
+    const startNodes = Array.from(allNodes.keys()).filter(nodeId => 
+      nodeId === 'start' || !hasIncomingEdge.has(nodeId)
+    );
+    
+    console.log(`🏁 Start nodes candidates: ${startNodes.join(', ')}`);
+    console.log(`📥 Nodes with incoming edges: ${Array.from(hasIncomingEdge).join(', ')}`);
+    
+    // If no clear start nodes, use the start node or fallback to first order_index
+    if (startNodes.length === 0 || startNodes.includes('start')) {
+      // Look for edges from 'start' node
+      const startEdges = flowEdges.filter(edge => edge.source_node_id === 'start');
+      console.log(`🌟 Start edges: ${startEdges.map(e => `start → ${e.target_node_id}`).join(', ')}`);
+      if (startEdges.length > 0) {
+        startEdges.forEach(edge => executionQueue.push(edge.target_node_id));
+      } else {
+        // No start node edges, find nodes with lowest order_index
+        const allOrderedNodes = Array.from(allNodes.values()).filter(node => node.enabled);
+        if (allOrderedNodes.length > 0) {
+          const minOrder = Math.min(...allOrderedNodes.map(node => node.orderIndex));
+          allOrderedNodes.filter(node => node.orderIndex === minOrder)
+            .forEach(node => {
+              const nodeId = `${node.type}_${node.id}`;
+              executionQueue.push(nodeId);
+            });
+        }
+      }
+    } else {
+      executionQueue.push(...startNodes);
+    }
+    
+    console.log(`🎬 Initial execution queue: [${executionQueue.join(', ')}]`);
+    
+    // Execute nodes following the flow
+    while (executionQueue.length > 0) {
+      const currentNodeId = executionQueue.shift()!;
+      console.log(`🔄 Processing node: ${currentNodeId}`);
+      
+      // Skip if already executed or if it's a special node
+      if (executedNodes.has(currentNodeId) || currentNodeId === 'start' || currentNodeId === 'end') {
+        console.log(`⏭️ Skipping ${currentNodeId} (${executedNodes.has(currentNodeId) ? 'already executed' : 'special node'})`);
+        continue;
+      }
+      
+      const node = allNodes.get(currentNodeId);
+      if (!node || !node.enabled) {
+        console.log(`❌ Node ${currentNodeId} not found or disabled`);
+        continue;
+      }
+      
+      // Execute the node
+      const startTime = Date.now();
+      let stepResult;
+      let stepError;
+      let conditionResult: boolean | undefined;
+      
+      const stepEmoji = this.getStepEmoji(node.type);
+      
+      try {
+        if (node.type === 'api_call') {
+          stepResult = await this.executeApiCall(node as ApiCall, variables);
+          variables[node.outputVariable] = stepResult;
+        } else if (node.type === 'model_call') {
+          stepResult = await this.executeModelCall(node as ModelCall, variables);
+          variables[node.outputVariable] = stepResult;
+        } else if (node.type === 'condition_node') {
+          conditionResult = await this.executeConditionNode(node as ConditionNode, variables);
+          stepResult = conditionResult;
+          console.log(`🔍 Condition ${currentNodeId} evaluated to: ${conditionResult}`);
+          
+          // Set condition output variables
+          if (node.trueOutputVariable && conditionResult) {
+            variables[node.trueOutputVariable] = true;
+          }
+          if (node.falseOutputVariable && !conditionResult) {
+            variables[node.falseOutputVariable] = false;
+          }
+        } else if (node.type === 'strategy_trigger_node') {
+          stepResult = await this.executeStrategyTriggerNode(node as StrategyTriggerNode, variables);
+          if (node.outputVariable && stepResult) {
+            variables[node.outputVariable] = stepResult;
+          }
+        } else if (node.type === 'telegram_message_node') {
+          stepResult = await this.executeTelegramMessageNode(node as TelegramMessageNode, variables);
+        }
+        
+        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`  ${stepEmoji} ${node.name} (${duration}s)`);
+        
+      } catch (error) {
+        stepError = error instanceof Error ? error.message : 'Unknown error';
+        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.error(`  ❌ ${node.name} failed: ${stepError} (${duration}s)`);
+        throw error;
+      }
+      
+      // Mark as executed
+      executedNodes.add(currentNodeId);
+      console.log(`✅ Node ${currentNodeId} executed, result: ${JSON.stringify(stepResult)}`);
+      
+      // Log the execution
+      const duration = Date.now() - startTime;
+      const log: FlowExecutionLog = {
+        stepType: node.type as any,
+        stepId: node.id,
+        stepName: node.name,
+        input: this.getStepInput(node),
+        output: stepResult,
+        error: stepError,
+        duration
+      };
+      
+      logs.push(log);
+      this.saveExecutionLog(executionId, log);
+      
+      // Find next nodes to execute based on flow edges
+      if (node.type === 'condition_node' && conditionResult !== undefined) {
+        // For condition nodes, follow the appropriate edge (true/false)
+        const handleId = conditionResult ? 'true' : 'false';
+        const edgeKey = `${currentNodeId}:${handleId}`;
+        const nextEdges = edgeMap.get(edgeKey) || [];
+        
+        console.log(`🎯 Condition node ${currentNodeId} result: ${conditionResult}, looking for edges: ${edgeKey}`);
+        console.log(`🔗 Found ${nextEdges.length} edges for ${edgeKey}: [${nextEdges.map(e => e.target_node_id).join(', ')}]`);
+        
+        nextEdges.forEach(edge => {
+          if (!executedNodes.has(edge.target_node_id)) {
+            console.log(`➕ Adding ${edge.target_node_id} to execution queue`);
+            executionQueue.push(edge.target_node_id);
+          } else {
+            console.log(`⏭️ ${edge.target_node_id} already executed, skipping`);
+          }
+        });
+      } else {
+        // For other nodes, follow default edges
+        const edgeKey = `${currentNodeId}:default`;
+        const defaultEdges = edgeMap.get(edgeKey) || [];
+        
+        console.log(`🔗 Looking for default edges from ${currentNodeId}: ${edgeKey}`);
+        console.log(`🔗 Found ${defaultEdges.length} default edges: [${defaultEdges.map(e => e.target_node_id).join(', ')}]`);
+        
+        defaultEdges.forEach(edge => {
+          if (!executedNodes.has(edge.target_node_id)) {
+            console.log(`➕ Adding ${edge.target_node_id} to execution queue`);
+            executionQueue.push(edge.target_node_id);
+          } else {
+            console.log(`⏭️ ${edge.target_node_id} already executed, skipping`);
+          }
+        });
+      }
+      
+      console.log(`📋 Current execution queue: [${executionQueue.join(', ')}]`);
+    }
+    
+    console.log(`🏁 Flow execution completed. Executed nodes: [${Array.from(executedNodes).join(', ')}]`);
+    
+    return {
+      success: true,
+      variables,
+      logs
+    };
+  }
+
+  private async executeLegacyOrderBasedStrategy(strategyId: number, executionId: number, variables: Record<string, any>, logs: FlowExecutionLog[]): Promise<FlowExecutionResult> {
+    // Get all flow nodes for this strategy
+    const apiCalls = this.getApiCallsByStrategy(strategyId);
+    const modelCalls = this.getModelCallsByStrategy(strategyId);
+    const conditionNodes = this.getConditionNodesByStrategy(strategyId);
+    const strategyTriggerNodes = this.getStrategyTriggerNodesByStrategy(strategyId);
+    const telegramMessageNodes = this.getTelegramMessageNodesByStrategy(strategyId);
+    
+    // Combine all steps
+    const allSteps = [
+      ...apiCalls.map(call => ({ ...call, type: 'api_call' as const })),
+      ...modelCalls.map(call => ({ ...call, type: 'model_call' as const })),
+      ...conditionNodes.map(node => ({ ...node, type: 'condition_node' as const })),
+      ...strategyTriggerNodes.map(node => ({ ...node, type: 'strategy_trigger_node' as const })),
+      ...telegramMessageNodes.map(node => ({ ...node, type: 'telegram_message_node' as const }))
+    ];
+
+    // Group steps by orderIndex for parallel execution
+    const stepGroups: { [orderIndex: number]: any[] } = {};
+    allSteps.forEach(step => {
+      if (step.enabled) {
+        if (!stepGroups[step.orderIndex]) {
+          stepGroups[step.orderIndex] = [];
+        }
+        stepGroups[step.orderIndex].push(step);
+      }
+    });
+
+    // Execute step groups in order, with parallel execution within each group
+    const orderedIndices = Object.keys(stepGroups).map(Number).sort((a, b) => a - b);
+    
+    for (const orderIndex of orderedIndices) {
+      const group = stepGroups[orderIndex];
+      
+      // Execute all steps in this group in parallel
+      const groupPromises = group.map(async (step) => {
+        const startTime = Date.now();
+        let stepResult;
+        let stepError;
+        
+        // Get emoji for step type
+        const stepEmoji = this.getStepEmoji(step.type);
+        
+        try {
+          if (step.type === 'api_call') {
+            stepResult = await this.executeApiCall(step as ApiCall, variables);
+            variables[step.outputVariable] = stepResult;
+          } else if (step.type === 'model_call') {
+            stepResult = await this.executeModelCall(step as ModelCall, variables);
+            variables[step.outputVariable] = stepResult;
+          } else if (step.type === 'condition_node') {
+            stepResult = await this.executeConditionNode(step as ConditionNode, variables);
+            // Condition nodes set their output variables internally
+          } else if (step.type === 'strategy_trigger_node') {
+            stepResult = await this.executeStrategyTriggerNode(step as StrategyTriggerNode, variables);
+            if (step.outputVariable && stepResult) {
+              variables[step.outputVariable] = stepResult;
+            }
+          } else if (step.type === 'telegram_message_node') {
+            stepResult = await this.executeTelegramMessageNode(step as TelegramMessageNode, variables);
+          }
+          
+          const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+          console.log(`  ${stepEmoji} ${step.name} (${duration}s)`);
+          
+        } catch (error) {
+          stepError = error instanceof Error ? error.message : 'Unknown error';
+          const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+          console.error(`  ❌ ${step.name} failed: ${stepError} (${duration}s)`);
+          throw error; // Re-throw to stop execution
+        }
+        
+        const duration = Date.now() - startTime;
+        
+        const log: FlowExecutionLog = {
+          stepType: step.type as any,
+          stepId: step.id,
+          stepName: step.name,
+          input: this.getStepInput(step),
+          output: stepResult,
+          error: stepError,
+          duration
+        };
+        
+        return log;
+      });
+
+      // Wait for all steps in this group to complete
+      const groupLogs = await Promise.all(groupPromises);
+      logs.push(...groupLogs);
+      
+      // Save logs to database
+      groupLogs.forEach(log => this.saveExecutionLog(executionId, log));
+    }
+    
+    return {
+      success: true,
+      variables,
+      logs
+    };
   }
   
   private async executeApiCall(apiCall: ApiCall, variables: Record<string, any>): Promise<any> {
@@ -720,12 +959,23 @@ export class StrategyFlowService {
     const data = await response.json();
     
     // Extract specific data using JSON path if provided
+    let result = data;
     if (apiCall.jsonPath) {
-      const result = JSONPath({ path: apiCall.jsonPath, json: data });
-      return result.length > 0 ? result[0] : null;
+      const extracted = JSONPath({ path: apiCall.jsonPath, json: data });
+      result = extracted.length > 0 ? extracted[0] : null;
     }
     
-    return data;
+    // Cast to number if requested and result is not null/undefined
+    if (apiCall.castToNumber && result !== null && result !== undefined) {
+      const numericResult = Number(result);
+      if (!isNaN(numericResult)) {
+        result = numericResult;
+      } else {
+        console.warn(`Failed to cast "${result}" to number for API call ${apiCall.name}`);
+      }
+    }
+    
+    return result;
   }
   
   private async executeModelCall(modelCall: ModelCall, variables: Record<string, any>): Promise<any> {
@@ -817,7 +1067,8 @@ export class StrategyFlowService {
       console.log('🧪 Testing API call:', {
         url: apiCall.url,
         method: apiCall.method,
-        jsonPath: apiCall.jsonPath
+        jsonPath: apiCall.jsonPath,
+        castToNumber: apiCall.castToNumber
       });
       
       const response = await fetch(apiCall.url, {
@@ -845,20 +1096,35 @@ export class StrategyFlowService {
           console.error('🧪 JSON Path extraction failed:', jsonPathError);
           extractedValue = { error: `Invalid JSON path: ${jsonPathError instanceof Error ? jsonPathError.message : 'Unknown JSON path error'}` };
         }
+      } else {
+        extractedValue = data;
+      }
+      
+      // Apply number casting if requested (for testing preview)
+      if (apiCall.castToNumber && extractedValue !== null && extractedValue !== undefined) {
+        const numericResult = Number(extractedValue);
+        if (!isNaN(numericResult)) {
+          extractedValue = numericResult;
+          console.log('🧪 Number casting applied:', { original: extractedValue, numeric: numericResult });
+        } else {
+          console.warn(`🧪 Failed to cast "${extractedValue}" to number`);
+        }
       }
       
       return {
         success: true,
         data,
         extractedValue,
-        jsonPath: apiCall.jsonPath
+        jsonPath: apiCall.jsonPath,
+        outputVariable: apiCall.outputVariable
       };
     } catch (error) {
       console.error('🧪 API test failed:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
-        jsonPath: apiCall.jsonPath
+        jsonPath: apiCall.jsonPath,
+        outputVariable: apiCall.outputVariable
       };
     }
   }
@@ -906,13 +1172,43 @@ export class StrategyFlowService {
       
       let result = false;
       switch (conditionNode.operator) {
-        case '>': result = Number(leftValue) > Number(rightValue); break;
-        case '<': result = Number(leftValue) < Number(rightValue); break;
-        case '>=': result = Number(leftValue) >= Number(rightValue); break;
-        case '<=': result = Number(leftValue) <= Number(rightValue); break;
-        case '==': result = leftValue == rightValue; break;
-        case '!=': result = leftValue != rightValue; break;
-        case 'contains': result = String(leftValue).includes(String(rightValue)); break;
+        case '>': 
+          result = Number(leftValue) > Number(rightValue); 
+          break;
+        case '<': 
+          result = Number(leftValue) < Number(rightValue); 
+          break;
+        case '>=': 
+          result = Number(leftValue) >= Number(rightValue); 
+          break;
+        case '<=': 
+          result = Number(leftValue) <= Number(rightValue); 
+          break;
+        case '==': 
+          // For numeric operators, convert to numbers; for others, use loose equality
+          if (this.isNumericComparison(leftValue, rightValue)) {
+            result = Number(leftValue) === Number(rightValue);
+          } else {
+            result = leftValue == rightValue;
+          }
+          break;
+        case '!=': 
+          // For numeric operators, convert to numbers; for others, use loose inequality
+          if (this.isNumericComparison(leftValue, rightValue)) {
+            result = Number(leftValue) !== Number(rightValue);
+          } else {
+            result = leftValue != rightValue;
+          }
+          break;
+        case 'contains': 
+          result = String(leftValue).includes(String(rightValue)); 
+          break;
+        case 'startsWith': 
+          result = String(leftValue).startsWith(String(rightValue)); 
+          break;
+        case 'endsWith': 
+          result = String(leftValue).endsWith(String(rightValue)); 
+          break;
         default:
           throw new Error(`Unknown operator: ${conditionNode.operator}`);
       }
@@ -922,6 +1218,12 @@ export class StrategyFlowService {
       console.error(`Condition evaluation failed:`, error);
       return false;
     }
+  }
+  
+  // Helper method to determine if we should use numeric comparison
+  private isNumericComparison(leftValue: any, rightValue: any): boolean {
+    return (typeof leftValue === 'number' || !isNaN(Number(leftValue))) &&
+           (typeof rightValue === 'number' || !isNaN(Number(rightValue)));
   }
   
   private async executeStrategyTriggerNode(triggerNode: StrategyTriggerNode, variables: Record<string, any>): Promise<any> {

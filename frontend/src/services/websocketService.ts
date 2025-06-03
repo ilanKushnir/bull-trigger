@@ -28,23 +28,24 @@ export interface LiveSignal {
 }
 
 export interface Signal {
-  id: string;
+  id?: number;
+  signalType: 'LONG' | 'SHORT';
   symbol: string;
-  signal: 'BUY' | 'SELL' | 'HOLD';
-  confidence: number;
-  price: number;
-  strategy: string;
-  created_at: string;
-  status?: 'active' | 'closed' | 'expired';
-  entry_price?: number;
-  current_price?: number;
-  pnl?: number;
-  reactions?: {
-    thumbsUp: number;
-    profit: number;
-    loss: number;
-  };
-  message?: string;
+  riskLevel: 'Low' | 'Medium' | 'High';
+  confidence: number; // 0-100
+  entryPriceMin: number;
+  entryPriceMax: number;
+  leverage: number;
+  tp1?: number;
+  tp2?: number;
+  tp3?: number;
+  stopLoss: number;
+  strategyName: string;
+  note?: string;
+  signalTag?: string;
+  status: 'active' | 'closed' | 'cancelled';
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Strategy {
@@ -131,14 +132,67 @@ class ApiService {
   }
 
   // ===== SIGNALS API =====
-  async getSignals(limit: number = 50): Promise<ApiResponse<Signal[]>> {
-    return this.request<Signal[]>(`/api/signals?limit=${limit}`);
+  async getSignals(filters?: {
+    status?: string;
+    symbol?: string;
+    signalType?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ApiResponse<Signal[]>> {
+    const params = new URLSearchParams();
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.symbol) params.append('symbol', filters.symbol);
+    if (filters?.signalType) params.append('signalType', filters.signalType);
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+    if (filters?.offset) params.append('offset', filters.offset.toString());
+    
+    const queryString = params.toString();
+    return this.request<Signal[]>(`/api/signals${queryString ? `?${queryString}` : ''}`);
   }
 
-  async createSignal(signal: Omit<Signal, 'id' | 'created_at'>): Promise<ApiResponse<{ id: number }>> {
-    return this.request<{ id: number }>('/api/signals', {
+  async getSignalById(id: number): Promise<ApiResponse<Signal>> {
+    return this.request<Signal>(`/api/signals/${id}`);
+  }
+
+  async createSignal(signal: Omit<Signal, 'id' | 'createdAt' | 'updatedAt'>): Promise<ApiResponse<Signal>> {
+    return this.request<Signal>('/api/signals', {
       method: 'POST',
       body: JSON.stringify(signal),
+    });
+  }
+
+  async updateSignal(id: number, updates: Partial<Signal>): Promise<ApiResponse<Signal>> {
+    return this.request<Signal>(`/api/signals/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deleteSignal(id: number): Promise<ApiResponse<{ success: boolean }>> {
+    return this.request<{ success: boolean }>(`/api/signals/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getSignalStats(): Promise<ApiResponse<{
+    total: number;
+    active: number;
+    closed: number;
+    cancelled: number;
+    byType: { LONG: number; SHORT: number };
+    byRisk: { Low: number; Medium: number; High: number };
+  }>> {
+    return this.request(`/api/signals/stats`);
+  }
+
+  async getSignalTelegramFormat(id: number): Promise<ApiResponse<{ message: string }>> {
+    return this.request<{ message: string }>(`/api/signals/${id}/telegram`);
+  }
+
+  async bulkUpdateSignals(ids: number[], status: string): Promise<ApiResponse<Signal[]>> {
+    return this.request<Signal[]>('/api/signals/bulk-update', {
+      method: 'PUT',
+      body: JSON.stringify({ ids, status }),
     });
   }
 
@@ -421,6 +475,25 @@ class ApiService {
     });
   }
 
+  // ===== FLOW EDGES MANAGEMENT =====
+
+  async getFlowEdges(strategyId: number): Promise<ApiResponse<{ edges: any[] }>> {
+    return this.request<{ edges: any[] }>(`/api/strategies/${strategyId}/edges`);
+  }
+
+  async createFlowEdge(strategyId: number, edge: { sourceNodeId: string; targetNodeId: string; sourceHandle?: string; targetHandle?: string }): Promise<ApiResponse<{ edgeId: string }>> {
+    return this.request<{ edgeId: string }>(`/api/strategies/${strategyId}/edges`, {
+      method: 'POST',
+      body: JSON.stringify(edge),
+    });
+  }
+
+  async deleteFlowEdge(strategyId: number, edgeId: string): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>(`/api/strategies/${strategyId}/edges/${edgeId}`, {
+      method: 'DELETE',
+    });
+  }
+
   // ===== STRATEGY EXECUTION =====
 }
 
@@ -642,7 +715,13 @@ export function useApi() {
   return {
     // Signals
     getSignals: apiService.getSignals.bind(apiService),
+    getSignalById: apiService.getSignalById.bind(apiService),
     createSignal: apiService.createSignal.bind(apiService),
+    updateSignal: apiService.updateSignal.bind(apiService),
+    deleteSignal: apiService.deleteSignal.bind(apiService),
+    getSignalStats: apiService.getSignalStats.bind(apiService),
+    getSignalTelegramFormat: apiService.getSignalTelegramFormat.bind(apiService),
+    bulkUpdateSignals: apiService.bulkUpdateSignals.bind(apiService),
     
     // Strategies  
     getStrategies: apiService.getStrategies.bind(apiService),
@@ -698,6 +777,11 @@ export function useApi() {
     updateSettings: apiService.updateSettings.bind(apiService),
     updateSetting: apiService.updateSetting.bind(apiService),
     deleteSetting: apiService.deleteSetting.bind(apiService),
-    resetAllSettings: apiService.resetAllSettings.bind(apiService)
+    resetAllSettings: apiService.resetAllSettings.bind(apiService),
+
+    // Flow Edges
+    getFlowEdges: apiService.getFlowEdges.bind(apiService),
+    createFlowEdge: apiService.createFlowEdge.bind(apiService),
+    deleteFlowEdge: apiService.deleteFlowEdge.bind(apiService)
   };
 } 

@@ -10,6 +10,7 @@ import path from 'path';
 import { pathToFileURL } from 'url';
 import { strategyExecutionService } from './services/strategyExecutionService';
 import { strategyFlowService } from './services/strategyFlowService';
+import { SignalsService } from './signals/signalsService';
 import { refreshRegistry } from './strategies/registry';
 import { resetTokenUsage } from './utils/settings';
 import { initializeWebSocketService } from './websocket/websocketService';
@@ -48,6 +49,9 @@ export const buildServer = async () => {
       }
     }
   });
+
+  // WebSocket service will be initialized later
+  let websocketService: any = null;
 
   await fastify.register(envPlugin, { schema: envSchema, dotenv: true, data: process.env });
 
@@ -499,6 +503,186 @@ export const buildServer = async () => {
   });
 
   // ===== END ADMIN MANAGEMENT =====
+
+  // ===== SIGNALS MANAGEMENT =====
+
+  // Get all signals with optional filters
+  fastify.get('/api/signals', async (req) => {
+    try {
+      const query = req.query as any;
+      const filters = {
+        status: query.status,
+        symbol: query.symbol,
+        signalType: query.signalType,
+        limit: query.limit ? Number(query.limit) : undefined,
+        offset: query.offset ? Number(query.offset) : undefined
+      };
+      
+      const signals = SignalsService.getSignals(filters);
+      return { success: true, data: signals };
+    } catch (error) {
+      console.error('Failed to get signals:', error);
+      return { success: false, error: 'Failed to get signals' };
+    }
+  });
+
+  // Get signal by ID
+  fastify.get<{ Params: { id: string } }>('/api/signals/:id', async (req) => {
+    try {
+      const id = Number(req.params.id);
+      const signal = SignalsService.getSignalById(id);
+      
+      if (!signal) {
+        return { success: false, error: 'Signal not found' };
+      }
+      
+      return { success: true, data: signal };
+    } catch (error) {
+      console.error('Failed to get signal:', error);
+      return { success: false, error: 'Failed to get signal' };
+    }
+  });
+
+  // Create new signal
+  fastify.post('/api/signals', async (req) => {
+    try {
+      const signalData = req.body as any;
+      
+      // Generate signal tag if not provided
+      if (!signalData.signalTag) {
+        signalData.signalTag = SignalsService.generateSignalTag();
+      }
+      
+      const signal = SignalsService.createSignal(signalData);
+      
+      // Broadcast new signal via WebSocket
+      websocketService?.broadcastAlert({
+        type: 'success',
+        message: `New ${signal.signalType} signal created for ${signal.symbol}`,
+        timestamp: new Date(),
+        data: signal
+      });
+      
+      return { success: true, data: signal };
+    } catch (error) {
+      console.error('Failed to create signal:', error);
+      return { success: false, error: 'Failed to create signal' };
+    }
+  });
+
+  // Update signal
+  fastify.put<{ Params: { id: string }; Body: any }>('/api/signals/:id', async (req) => {
+    try {
+      const id = Number(req.params.id);
+      const updates = req.body;
+      
+      const signal = SignalsService.updateSignal(id, updates);
+      
+      if (!signal) {
+        return { success: false, error: 'Signal not found' };
+      }
+      
+      // Broadcast signal update via WebSocket
+      websocketService?.broadcastAlert({
+        type: 'info',
+        message: `Signal ${signal.symbol} updated to ${signal.status}`,
+        timestamp: new Date()
+      });
+      
+      return { success: true, data: signal };
+    } catch (error) {
+      console.error('Failed to update signal:', error);
+      return { success: false, error: 'Failed to update signal' };
+    }
+  });
+
+  // Delete signal
+  fastify.delete<{ Params: { id: string } }>('/api/signals/:id', async (req) => {
+    try {
+      const id = Number(req.params.id);
+      const signal = SignalsService.getSignalById(id);
+      
+      if (!signal) {
+        return { success: false, error: 'Signal not found' };
+      }
+      
+      const deleted = SignalsService.deleteSignal(id);
+      
+      if (deleted) {
+        // Broadcast signal deletion via WebSocket
+        websocketService?.broadcastAlert({
+          type: 'warning',
+          message: `Signal ${signal.symbol} deleted`,
+          timestamp: new Date()
+        });
+        
+        return { success: true };
+      } else {
+        return { success: false, error: 'Failed to delete signal' };
+      }
+    } catch (error) {
+      console.error('Failed to delete signal:', error);
+      return { success: false, error: 'Failed to delete signal' };
+    }
+  });
+
+  // Get signal statistics
+  fastify.get('/api/signals/stats', async () => {
+    try {
+      const stats = SignalsService.getSignalStats();
+      return { success: true, data: stats };
+    } catch (error) {
+      console.error('Failed to get signal stats:', error);
+      return { success: false, error: 'Failed to get signal stats' };
+    }
+  });
+
+  // Format signal for Telegram
+  fastify.get<{ Params: { id: string } }>('/api/signals/:id/telegram', async (req) => {
+    try {
+      const id = Number(req.params.id);
+      const signal = SignalsService.getSignalById(id);
+      
+      if (!signal) {
+        return { success: false, error: 'Signal not found' };
+      }
+      
+      const telegramMessage = SignalsService.formatSignalForTelegram(signal);
+      return { success: true, data: { message: telegramMessage } };
+    } catch (error) {
+      console.error('Failed to format signal for Telegram:', error);
+      return { success: false, error: 'Failed to format signal for Telegram' };
+    }
+  });
+
+  // Bulk update signals status
+  fastify.put('/api/signals/bulk-update', async (req) => {
+    try {
+      const { ids, status } = req.body as { ids: number[]; status: string };
+      const updatedSignals = [];
+      
+      for (const id of ids) {
+        const signal = SignalsService.updateSignal(id, { status });
+        if (signal) {
+          updatedSignals.push(signal);
+        }
+      }
+      
+      // Broadcast bulk update via WebSocket
+      websocketService?.broadcastAlert({
+        type: 'info',
+        message: `${updatedSignals.length} signals updated to ${status}`,
+        timestamp: new Date()
+      });
+      
+      return { success: true, data: updatedSignals };
+    } catch (error) {
+      console.error('Failed to bulk update signals:', error);
+      return { success: false, error: 'Failed to bulk update signals' };
+    }
+  });
+
+  // ===== END SIGNALS MANAGEMENT =====
 
   // ===== CONDITION NODES MANAGEMENT =====
 
